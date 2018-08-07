@@ -1,40 +1,45 @@
+#ifndef BOTNETSIM_CPP_THREADING_H
+#define BOTNETSIM_CPP_THREADING_H
+
+#include <iostream>
+
 class Timer {
 public:
     bool Debug = false;
 
     Timer(float);
 
-    Timer(short *, float);
+    Timer(int *, float);
 
-    Timer(short, short, short, short, short, short, float);
+    Timer(int, int, int, int, int, int, float);
 
-    short *getDateTime();
+    int *getDateTime();
 
-    short getYear();
+    int getYear();
 
-    short getMonth();
+    int getMonth();
 
-    short getDay();
+    int getDay();
 
-    short getHour();
+    int getHour();
 
-    short getMinute();
+    int getMinute();
 
-    short getSecond();
+    int getSecond();
 
-    void setDateTime(short *);
+    void setDateTime(int *);
 
-    void setYear(short);
+    void setYear(int);
 
-    void setMonth(short);
+    void setMonth(int);
 
-    void setDay(short);
+    void setDay(int);
 
-    void setHour(short);
+    void setHour(int);
 
-    void setMinute(short);
+    void setMinute(int);
 
-    void setSecond(short);
+    void setSecond(int);
 
     float getRate();
 
@@ -54,10 +59,17 @@ public:
 
     short dayInMonth();
 
+    std::string toString();
+
 private:
-    // DateTime {year, month, day, hour, minute, second}
+    // DateTime arr[6]{year, month, day, hour, minute, second}
+    int Default_Datetime[6] = {2018, 1, 1, 0, 0, 0};
+    int *DateTime;
+    int TimePass = 0;
     // UpdateRate (mini second)
-    short DateTime[6], UpdateRate;
+    short UpdateRate = 100;
     float Rate;
     bool Run;
 };
+
+#endif //BOTNETSIM_CPP_THREADING_H

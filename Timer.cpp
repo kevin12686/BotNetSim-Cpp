@@ -1,81 +1,81 @@
 #include <iostream>
+#include <sstream>
 #include <windows.h>
 #include "Timer.h"
 
-using namespace std;
-
 Timer::Timer(float rate) {
+    this->setDateTime(this->Default_Datetime);
     this->setRate(rate);
     this->Run = false;
 }
 
-Timer::Timer(short *datetime, float rate) {
+Timer::Timer(int *datetime, float rate) {
     this->setDateTime(datetime);
     this->setRate(rate);
     this->Run = false;
 }
 
-Timer::Timer(short year, short month, short day, short hour, short minute, short second, float rate) {
-    short datetime[6] = {year, month, day, hour, minute, second};
+Timer::Timer(int year, int month, int day, int hour, int minute, int second, float rate) {
+    int datetime[6] = {year, month, day, hour, minute, second};
     this->setDateTime(datetime);
     this->setRate(rate);
     this->Run = false;
 }
 
-short *Timer::getDateTime() {
+int *Timer::getDateTime() {
     return this->DateTime;
 }
 
 
-short Timer::getYear() {
-    return (this->DateTime)[0];
+int Timer::getYear() {
+    return this->DateTime[0];
 }
 
-short Timer::getMonth() {
-    return (this->DateTime)[1];
+int Timer::getMonth() {
+    return this->DateTime[1];
 }
 
-short Timer::getDay() {
-    return (this->DateTime)[2];
+int Timer::getDay() {
+    return this->DateTime[2];
 }
 
-short Timer::getHour() {
-    return (this->DateTime)[3];
+int Timer::getHour() {
+    return this->DateTime[3];
 }
 
-short Timer::getMinute() {
-    return (this->DateTime)[4];
+int Timer::getMinute() {
+    return this->DateTime[4];
 }
 
-short Timer::getSecond() {
-    return (this->DateTime)[5];
+int Timer::getSecond() {
+    return this->DateTime[5];
 }
 
-void Timer::setDateTime(short *datetime) {
+void Timer::setDateTime(int *datetime) {
     this->DateTime = datetime;
 }
 
-void Timer::setYear(short year) {
+void Timer::setYear(int year) {
     (this->DateTime[0]) = year;
 }
 
-void Timer::setMonth(short month) {
+void Timer::setMonth(int month) {
     (this->DateTime[1]) = month;
 }
 
-void Timer::setDay(short day) {
+void Timer::setDay(int day) {
     (this->DateTime[2]) = day;
 }
 
-void Timer::setHour(short hour) {
+void Timer::setHour(int hour) {
     (this->DateTime[3]) = hour;
 }
 
-void Timer::setMinute(short minute) {
+void Timer::setMinute(int minute) {
     (this->DateTime[4]) = minute;
 }
 
-void Timer::setSecond(short second) {
+void Timer::setSecond(int second) {
     (this->DateTime[5]) = second;
 }
 
@@ -88,48 +88,56 @@ void Timer::setRate(float rate) {
 }
 
 void Timer::timeGoOn() {
-    bool flag = false;
-    short passTime = (short) (((this->UpdateRate) / 1000) * this->Rate);
-    this->DateTime[5] += passTime;
-    // Second
-    if (this->DateTime[5] > 59) {
-        this->DateTime[5] = 0;
-        this->DateTime[4]++;
-    } else {
-        // Minute
-        if (this->DateTime[4] > 59) {
-            this->DateTime[4] = 0;
-            this->DateTime[3]++;
-        }
-        // Hour
-        if ((this->DateTime[3]) > 23) {
-            this->DateTime[3] = 0;
-            this->DateTime[2]++;
-        }
-        // Day
-        if (this->DateTime[2] > this->dayInMonth()) {
-            this->DateTime[2] = 1;
-            this->DateTime[1]++;
-        }
-        // Month
-        if (this->DateTime[1] > 12) {
-            this->DateTime[1] = 1;
-            this->DateTime[0]++;
+    if (this->TimePass >= 1000) {
+        short days = this->dayInMonth();
+        int temp = this->TimePass;
+        this->TimePass %= 1000;
+        int passTime = (int) ((temp - this->TimePass) / 1000 * this->Rate);
+        this->DateTime[5] += passTime;
+        // Second
+        if (this->DateTime[5] > 59) {
+            temp = this->DateTime[5];
+            this->DateTime[5] %= 60;
+            this->DateTime[4] += (temp - this->DateTime[5]) / 60;
+            // Minute
+            if (this->DateTime[4] > 59) {
+                temp = this->DateTime[4];
+                this->DateTime[4] %= 60;
+                this->DateTime[3] += (temp - this->DateTime[4]) / 60;
+            }
+            // Hour
+            if ((this->DateTime[3]) > 23) {
+                temp = this->DateTime[3];
+                this->DateTime[3] %= 24;
+                this->DateTime[2] += (temp - this->DateTime[3]) / 24;
+            }
+            // Day
+            if (this->DateTime[2] > days) {
+                temp = this->DateTime[2];
+                this->DateTime[2] %= days;
+                this->DateTime[1] += (temp - this->DateTime[2]) / days;
+            }
+            // Month (Careful: No Defensive)
+            if (this->DateTime[1] > 12) {
+                this->DateTime[1] -= 12;
+                this->DateTime[0]++;
+            }
         }
     }
 }
 
 void Timer::run() {
     if (this->Debug) {
-        cout << "[Debug INFO] Timer start." << endl;
+        std::cout << "[Debug INFO] Timer start." << std::endl;
     }
     this->Run = true;
     while (this->Run) {
         Sleep(this->UpdateRate);
+        this->TimePass += this->UpdateRate;
         this->timeGoOn();
     }
     if (this->Debug) {
-        cout << "[Debug INFO] Timer stop." << endl;
+        std::cout << "[Debug INFO] Timer stop." << std::endl;
     }
 }
 
@@ -161,7 +169,7 @@ short Timer::dayInMonth() {
             result = 28;
         }
     } else {
-        for (int i; i < 7; i++) {
+        for (short i = 0; i < 7; i++) {
             if (month == day31[i]) {
                 flag = true;
                 break;
@@ -174,4 +182,11 @@ short Timer::dayInMonth() {
         }
     }
     return result;
+}
+
+std::string Timer::toString() {
+    std::ostringstream ostream;
+    ostream << this->getYear() << "/" << this->getMonth() << "/" << this->getDay();
+    ostream << " " << this->getHour() << ":" << this->getMinute() << ":" << this->getSecond();
+    return ostream.str();
 }
