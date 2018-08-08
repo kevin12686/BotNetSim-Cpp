@@ -13,7 +13,7 @@ _thread::~_thread() {
 void _thread::start() {
     this->Thread_H = CreateThread(NULL, 0, this->Process, (LPVOID) this, 0, &(this->Thread_id));
     if (this->Thread_H == NULL) {
-        std::cout << "Thread Created Error. (ErrorCode: \"" << GetLastError() << "\")" << std::endl;
+        std::cout << "[Error] Thread Created Error. (ErrorCode: \"" << GetLastError() << "\")" << std::endl;
     } else if (Debug) {
         std::cout << "[Debug INFO] Thread Created." << std::endl;
     }
@@ -23,7 +23,7 @@ void _thread::terminate() {
     if (TerminateThread(this->Thread_H, 0) && this->Debug) {
         std::cout << "[Debug INFO] Thread Terminated." << std::endl;
     } else {
-        std::cout << "Thread Terminated Error. (ErrorCode: \"" << GetLastError() << "\")" << std::endl;
+        std::cout << "[Error] Thread Terminated Error. (ErrorCode: \"" << GetLastError() << "\")" << std::endl;
     }
     this->Clean();
 }

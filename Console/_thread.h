@@ -31,7 +31,7 @@ private:
 
     DWORD static WINAPI Process(LPVOID target) {
         if (target == NULL) {
-            std::cout << "Thread Error. (Target can not be NULL)" << std::endl;
+            std::cout << "[Error] Thread Error. (Target can not be NULL)" << std::endl;
             return 0;
         }
         _thread *t = (_thread *) (target);
@@ -39,7 +39,7 @@ private:
         t->Status = true;
         ptr();
         t->Status = false;
-        return 0;
+        return 1;
     };
 };
 
