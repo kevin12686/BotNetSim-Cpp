@@ -29,7 +29,7 @@ private:
 
     void Clean();
 
-    DWORD WINAPI static Process(LPVOID target) {
+    DWORD static WINAPI Process(LPVOID target) {
         if (target == NULL) {
             std::cout << "Thread Error. (Target can not be NULL)" << std::endl;
             return 0;
