@@ -4,13 +4,17 @@ set(CMAKE_CXX_STANDARD 11)
 
 add_library(Timer Timer.h Timer.cpp)
 add_library(_thread _thread.h _thread.cpp)
+add_library(_socket _socket.h _socket.cpp)
 
 add_executable(Console Console.cpp)
 add_executable(Timer_test Timer_test.cpp)
 add_executable(_thread_test _thread_test.cpp)
+add_executable(_socket_test _socket_test.cpp)
 
 if (WIN32)
+    target_link_libraries(_socket ws2_32)
     target_link_libraries(Console ws2_32)
     target_link_libraries(Timer_test Timer)
     target_link_libraries(_thread_test _thread)
+    target_link_libraries(_socket_test _socket)
 endif ()
