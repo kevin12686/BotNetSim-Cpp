@@ -1,4 +1,3 @@
-#include <iostream>
 #include <sstream>
 #include <windows.h>
 #include "Timer.h"

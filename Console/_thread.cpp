@@ -1,5 +1,3 @@
-#include <iostream>
-#include <windows.h>
 #include "_thread.h"
 
 _thread::_thread(int (*target)()) {

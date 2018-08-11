@@ -2,12 +2,21 @@
 
 bool _socket::Debug = false;
 
-_socket::_socket(SOCKET socket) {
+_socket::_socket(SOCKET socket, char *ip, int bufsize) {
+    if (_socket::Debug) {
+        printf("[Debug INFO] %s connected.\n", ip);
+    }
+    this->Buffersize = bufsize;
+    int len = strlen(ip) + 1;
     this->ConnectSocket = socket;
     this->RecvBuf = new char[this->Buffersize]();
+    this->New_char_status = true;
+    this->IP_Address = new char[len]();
+    strcpy_s(this->IP_Address, len, ip);
 }
 
 _socket::_socket(char *ip, char *port, int bufsize) {
+    this->New_char_status = false;
     this->IP_Address = ip;
     this->Port = port;
     this->Buffersize = bufsize;
@@ -54,6 +63,10 @@ int _socket::send_(char *data) {
         return -1;
     }
     return iResult;
+}
+
+char *_socket::getIPAddr() {
+    return this->IP_Address;
 }
 
 bool _socket::shutdown_(short option) {
@@ -138,4 +151,7 @@ int _socket::init_() {
 
 void _socket::clean_() {
     delete (this->RecvBuf);
+    if (this->New_char_status) {
+        delete (this->IP_Address);
+    }
 }

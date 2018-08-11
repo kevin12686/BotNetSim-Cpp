@@ -25,7 +25,7 @@ public:
         WSACleanup();
     };
 
-    _socket(SOCKET);
+    _socket(SOCKET, char *, int);
 
     _socket(char *, char *, int);
 
@@ -35,12 +35,15 @@ public:
 
     int send_(char *);
 
+    char *getIPAddr();
+
     // 0: both, 1: send, 2: recv
     bool shutdown_(short);
 
     int close_();
 
 private:
+    bool New_char_status;
     int Buffersize;
     char *IP_Address, *Port, *RecvBuf;
     SOCKET ConnectSocket = INVALID_SOCKET;
