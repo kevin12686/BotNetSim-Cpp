@@ -4,10 +4,18 @@
 using namespace std;
 
 int main() {
+    WSADATA wsadata;
+    _socket::Debug = true;
+
+    _socket::wsastartup_(&wsadata);
+
     _socket s((char *)"127.0.0.1", (char *)"6666", 1024);
     cout << s.send_((char *)"hi, i am testing my code.") << endl;
     cout << s.recv_() << endl;
+
     s.shutdown_(_socket::BOTH);
     s.close_();
+
+    _socket::wsacleanup_();
     return 0;
 }

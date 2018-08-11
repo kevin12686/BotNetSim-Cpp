@@ -1,14 +1,18 @@
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <stdio.h>
 #include "_socket.h"
+
+bool _socket::Debug = false;
+
+_socket::_socket(SOCKET socket) {
+    this->ConnectSocket = socket;
+    this->RecvBuf = new char[this->Buffersize]();
+}
 
 _socket::_socket(char *ip, char *port, int bufsize) {
     this->IP_Address = ip;
     this->Port = port;
     this->Buffersize = bufsize;
     this->init_();
-    if (Debug) {
+    if (_socket::Debug) {
         printf("[Debug INFO] Socket initialized.\n");
     }
 }
@@ -18,7 +22,7 @@ _socket::~_socket() {
 }
 
 char *_socket::recv_() {
-    if (Debug) {
+    if (_socket::Debug) {
         printf("[Debug INFO] Socket receive.\n");
     }
     char *data = NULL;
@@ -35,7 +39,7 @@ char *_socket::recv_() {
 }
 
 int _socket::send_(char *data) {
-    if (Debug) {
+    if (_socket::Debug) {
         printf("[Debug INFO] Socket send.\n");
     }
     int data_len = strlen(data) + 1;
@@ -53,7 +57,7 @@ int _socket::send_(char *data) {
 }
 
 bool _socket::shutdown_(short option) {
-    if (Debug) {
+    if (_socket::Debug) {
         printf("[Debug INFO] Socket shutdown.\n");
     }
     int iResult;
@@ -77,7 +81,7 @@ bool _socket::shutdown_(short option) {
 }
 
 int _socket::close_() {
-    if (Debug) {
+    if (_socket::Debug) {
         printf("[Debug INFO] Socket close.\n");
     }
     int result = closesocket(this->ConnectSocket);
@@ -89,12 +93,6 @@ int _socket::init_() {
     int iResult;
     struct addrinfo *result = NULL;
     this->RecvBuf = new char[this->Buffersize]();
-
-    iResult = WSAStartup(MAKEWORD(2, 2), &(this->Wsadata));
-    if (iResult != 0) {
-        printf("WSAStartup failed with error: %d\n", iResult);
-        return 0;
-    }
 
     ZeroMemory(&(this->hints), sizeof(hints));
     this->hints.ai_family = AF_UNSPEC;
@@ -140,5 +138,4 @@ int _socket::init_() {
 
 void _socket::clean_() {
     delete (this->RecvBuf);
-    WSACleanup();
 }

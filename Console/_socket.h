@@ -3,10 +3,29 @@
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <stdio.h>
 
 class _socket {
 public:
-    const static short BOTH = 0, SEND = 1, RECV = 2;
+    static bool Debug;
+    static const short BOTH = 0, SEND = 1, RECV = 2;
+
+    bool static wsastartup_(WSADATA *Wsadata) {
+        int iResult = WSAStartup(MAKEWORD(2, 2), Wsadata);
+
+        if (iResult != 0) {
+            printf("WSAStartup failed with error: %d\n", iResult);
+            return false;
+        } else {
+            return true;
+        }
+    };
+
+    void static wsacleanup_() {
+        WSACleanup();
+    };
+
+    _socket(SOCKET);
 
     _socket(char *, char *, int);
 
@@ -22,10 +41,8 @@ public:
     int close_();
 
 private:
-    bool Debug = false;
     int Buffersize;
     char *IP_Address, *Port, *RecvBuf;
-    WSADATA Wsadata;
     SOCKET ConnectSocket = INVALID_SOCKET;
     struct addrinfo hints;
 
