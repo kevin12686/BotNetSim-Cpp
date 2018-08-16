@@ -150,8 +150,14 @@ int _socket::init_() {
 }
 
 void _socket::clean_() {
-    delete [] this->RecvBuf;
+    if (this->RecvBuf != NULL) {
+        delete[] this->RecvBuf;
+        this->RecvBuf = NULL;
+    } else{
+        printf("RecvBuf is NULL");
+    }
+
     if (this->New_char_status) {
-        delete [] this->IP_Address;
+        delete[] this->IP_Address;
     }
 }
