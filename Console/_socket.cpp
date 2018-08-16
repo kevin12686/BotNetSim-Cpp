@@ -9,7 +9,7 @@ _socket::_socket(SOCKET socket, char *ip, int bufsize) {
     this->Buffersize = bufsize;
     int len = strlen(ip) + 1;
     this->ConnectSocket = socket;
-    this->RecvBuf = new char[this->Buffersize]();
+    this->RecvBuf = new char[this->Buffersize];
     this->New_char_status = true;
     this->IP_Address = new char[len]();
     strcpy_s(this->IP_Address, len, ip);
@@ -105,7 +105,7 @@ int _socket::close_() {
 int _socket::init_() {
     int iResult;
     struct addrinfo *result = NULL;
-    this->RecvBuf = new char[this->Buffersize]();
+    this->RecvBuf = new char[this->Buffersize];
 
     ZeroMemory(&(this->hints), sizeof(hints));
     this->hints.ai_family = AF_UNSPEC;
@@ -150,7 +150,7 @@ int _socket::init_() {
 }
 
 void _socket::clean_() {
-    delete (this->RecvBuf);
+    delete [] this->RecvBuf;
     if (this->New_char_status) {
         delete (this->IP_Address);
     }
