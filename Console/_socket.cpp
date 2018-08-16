@@ -152,6 +152,6 @@ int _socket::init_() {
 void _socket::clean_() {
     delete [] this->RecvBuf;
     if (this->New_char_status) {
-        delete (this->IP_Address);
+        delete [] this->IP_Address;
     }
 }
