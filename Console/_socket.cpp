@@ -153,11 +153,10 @@ void _socket::clean_() {
     if (this->RecvBuf != NULL) {
         delete[] this->RecvBuf;
         this->RecvBuf = NULL;
-    } else{
-        printf("RecvBuf is NULL");
     }
 
-    if (this->New_char_status) {
+    if (this->New_char_status && this->New_char_status != NULL) {
         delete[] this->IP_Address;
+        this->IP_Address = NULL;
     }
 }
