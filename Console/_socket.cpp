@@ -7,12 +7,12 @@ _socket::_socket(SOCKET socket, char *ip, int bufsize) {
         printf("[Debug INFO] %s connected.\n", ip);
     }
     this->Buffersize = bufsize;
-    int len = strlen(ip) + 1;
+    int len = strlen(ip);
     this->ConnectSocket = socket;
-    this->RecvBuf = new char[this->Buffersize]{0};
+    this->RecvBuf = new char[this->Buffersize]();
     this->New_char_status = true;
-    this->IP_Address = new char[len]{0};
-    strcpy_s(this->IP_Address, len, ip);
+    this->IP_Address = new char[len + 1]();
+    strcpy_s(this->IP_Address, len + 1, ip);
 }
 
 _socket::_socket(char *ip, char *port, int bufsize) {
@@ -105,7 +105,7 @@ int _socket::close_() {
 int _socket::init_() {
     int iResult;
     struct addrinfo *result = NULL;
-    this->RecvBuf = new char[this->Buffersize]{0};
+    this->RecvBuf = new char[this->Buffersize]();
 
     ZeroMemory(&(this->hints), sizeof(hints));
     this->hints.ai_family = AF_UNSPEC;

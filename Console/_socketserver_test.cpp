@@ -87,5 +87,7 @@ void client_thread() {
     cout << "From " << client.getIPAddr() << " : " << s << endl;
     client.send_((char *) "Good.");
     client.shutdown_(_socket::BOTH);
+    printf("tag1\n");
     client.close_();
+    printf("tag2\n");
 }

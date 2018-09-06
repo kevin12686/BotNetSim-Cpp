@@ -45,7 +45,7 @@ public:
 private:
     bool New_char_status;
     int Buffersize;
-    char *IP_Address, *Port, *RecvBuf;
+    char *IP_Address = NULL, *Port = NULL, *RecvBuf = NULL;
     SOCKET ConnectSocket = INVALID_SOCKET;
     struct addrinfo hints;
 
