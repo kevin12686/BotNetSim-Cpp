@@ -9,7 +9,7 @@ int main() {
 
     _socket::wsastartup_(&wsadata);
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 100; i++) {
         _socket s((char *) "127.0.0.1", (char *) "6666", 1024);
         string data = to_string(i);
         data += " hi, testing";
@@ -19,7 +19,6 @@ int main() {
         s.shutdown_(_socket::BOTH);
         s.close_();
     }
-
     _socket::wsacleanup_();
     return 0;
 }

@@ -98,6 +98,5 @@ int _socketserver::init_() {
         this->close_();
         return 0;
     }
-
     return 1;
 }

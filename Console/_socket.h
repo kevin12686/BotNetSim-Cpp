@@ -52,7 +52,6 @@ private:
     int init_();
 
     void clean_();
-
 };
 
 #endif //BOTNETSIM_CPP_SOCKET_H

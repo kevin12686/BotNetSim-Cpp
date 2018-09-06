@@ -13,7 +13,7 @@ void client_thread(void);
 HANDLE QMutex;
 
 // Collect parameters for client_thread
-queue<_socket*> ClientQ;
+queue<_socket *> ClientQ;
 
 // Collect _thread
 vector<_thread *> ClientT;
@@ -82,7 +82,7 @@ void accept_thread() {
 
 void client_thread() {
     WaitForSingleObject(QMutex, INFINITE);
-    _socket * client = ClientQ.front();
+    _socket *client = ClientQ.front();
     ClientQ.pop();
     ReleaseMutex(QMutex);
     string s = client->recv_();
@@ -90,4 +90,5 @@ void client_thread() {
     client->send_((char *) "Good.");
     client->shutdown_(_socket::BOTH);
     client->close_();
+    delete client;
 }
