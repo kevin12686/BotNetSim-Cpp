@@ -14,7 +14,7 @@ public:
     // mini second
     bool check_connect_(int);
 
-    _socket accept_();
+    _socket * accept_();
 
     int close_();
 

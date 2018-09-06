@@ -13,7 +13,7 @@ void client_thread(void);
 HANDLE QMutex;
 
 // Collect parameters for client_thread
-queue<_socket> ClientQ;
+queue<_socket*> ClientQ;
 
 // Collect _thread
 vector<_thread *> ClientT;
@@ -49,7 +49,7 @@ int main() {
     accept_t.join();
 
     // 清理垃圾
-    delete (s);
+    delete s;
     _socket::wsacleanup_();
 
     CloseHandle(QMutex);
@@ -64,7 +64,9 @@ void accept_thread() {
         flag = s->check_connect_(1000);
         if (flag) {
             cout << "Somebody connected." << endl;
+            WaitForSingleObject(QMutex, INFINITE);
             ClientQ.push(s->accept_());
+            ReleaseMutex(QMutex);
             t = new _thread((int (*)()) client_thread);
             t->start();
             ClientT.push_back(t);
@@ -80,14 +82,12 @@ void accept_thread() {
 
 void client_thread() {
     WaitForSingleObject(QMutex, INFINITE);
-    _socket client = ClientQ.front();
+    _socket * client = ClientQ.front();
     ClientQ.pop();
     ReleaseMutex(QMutex);
-    string s = client.recv_();
-    cout << "From " << client.getIPAddr() << " : " << s << endl;
-    client.send_((char *) "Good.");
-    client.shutdown_(_socket::BOTH);
-    printf("tag1\n");
-    client.close_();
-    printf("tag2\n");
+    string s = client->recv_();
+    cout << "From " << client->getIPAddr() << " : " << s << endl;
+    client->send_((char *) "Good.");
+    client->shutdown_(_socket::BOTH);
+    client->close_();
 }

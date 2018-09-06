@@ -36,14 +36,17 @@ bool _socketserver::check_connect_(int mini_sec) {
     }
 }
 
-_socket _socketserver::accept_() {
+_socket * _socketserver::accept_() {
     SOCKADDR_IN clientinfo;
     int infosize = sizeof(clientinfo);
+    _socket *client = NULL;
     SOCKET ClientSocket = accept(this->ListenSocket, (struct sockaddr *) &clientinfo, &infosize);
-    _socket client(ClientSocket, inet_ntoa(clientinfo.sin_addr), this->Buffersize);
     if (ClientSocket == INVALID_SOCKET) {
         printf("Accept failed with error: %d\n", WSAGetLastError());
         this->close_();
+    }
+    else{
+        client = new _socket(ClientSocket, inet_ntoa(clientinfo.sin_addr), this->Buffersize);
     }
     return client;
 }

@@ -155,7 +155,7 @@ void _socket::clean_() {
         this->RecvBuf = NULL;
     }
 
-    if (this->New_char_status && this->New_char_status != NULL) {
+    if (this->New_char_status && this->IP_Address != NULL) {
         delete[] this->IP_Address;
         this->IP_Address = NULL;
     }
