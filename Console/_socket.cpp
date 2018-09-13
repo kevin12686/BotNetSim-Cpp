@@ -30,17 +30,40 @@ _socket::~_socket() {
     this->clean_();
 }
 
-char *_socket::recv_() {
-    if (_socket::Debug) {
-        printf("[Debug INFO] Socket receive.\n");
+bool _socket::check_recv_(int mini_sec) {
+    int temp = -1;
+    FD_ZERO(&this->readfds);
+    FD_SET(this->ConnectSocket, &this->readfds);
+    this->tv.tv_usec = mini_sec % 1000 * 1000;
+    this->tv.tv_sec = (int) (mini_sec / 1000);
+    temp = select(this->ConnectSocket + 1, &this->readfds, NULL, NULL, &this->tv);
+    if (temp == -1) {
+        printf("Select error. code:%d\n", GetLastError());
+        return false;
+    } else if (temp == 0) {
+        if (_socket::Debug) {
+            printf("[Debug INFO] Select timeout.\n");
+        }
+        return false;
+    } else {
+        return FD_ISSET(this->ConnectSocket, &this->readfds) ? true : false;
     }
+}
+
+char *_socket::recv_() {
     char *data = NULL;
     int iResult = recv(this->ConnectSocket, this->RecvBuf, this->Buffersize, 0);
-    if (iResult > 0)
+    if (iResult > 0) {
+        if (_socket::Debug) {
+            printf("[Debug INFO] Socket receive.\n");
+        }
         data = this->RecvBuf;
-    else if (iResult == 0)
+    } else if (iResult == 0) {
+        if (_socket::Debug) {
+            printf("[Debug INFO] Socket Closed.\n");
+        }
         data = NULL;
-    else {
+    } else {
         printf("Recv failed with error: %d\n", WSAGetLastError());
         data = NULL;
     }

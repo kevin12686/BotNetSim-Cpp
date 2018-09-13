@@ -61,6 +61,8 @@ public:
 
     std::string toString();
 
+    std::string timestamp();
+
 private:
     // DateTime arr[6]{year, month, day, hour, minute, second}
     int Default_Datetime[6] = {2018, 1, 1, 0, 0, 0};

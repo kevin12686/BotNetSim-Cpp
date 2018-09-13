@@ -87,7 +87,7 @@ void client_thread() {
     ReleaseMutex(QMutex);
     string s = client->recv_();
     cout << "From " << client->getIPAddr() << " : " << s << endl;
-    client->send_((char *) "Good.");
+    //client->send_((char *) "Good.");
     client->shutdown_(_socket::BOTH);
     client->close_();
     delete client;

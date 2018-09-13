@@ -134,6 +134,9 @@ void Timer::run() {
         Sleep(this->UpdateRate);
         this->TimePass += this->UpdateRate;
         this->timeGoOn();
+        if (this->Debug) {
+            std::cout << "[Debug INFO] " << this->timestamp() << std::endl;
+        }
     }
     if (this->Debug) {
         std::cout << "[Debug INFO] Timer stop." << std::endl;
@@ -187,5 +190,26 @@ std::string Timer::toString() {
     std::ostringstream ostream;
     ostream << this->getYear() << "/" << this->getMonth() << "/" << this->getDay();
     ostream << " " << this->getHour() << ":" << this->getMinute() << ":" << this->getSecond();
+    return ostream.str();
+}
+
+std::string Timer::timestamp() {
+    std::ostringstream ostream;
+    ostream << this->getYear();
+    if(this->getMonth() < 10)
+        ostream << 0;
+    ostream << this->getMonth();
+    if(this->getDay() < 10)
+        ostream << 0;
+    ostream << this->getDay();
+    if(this->getHour() < 10)
+        ostream << 0;
+    ostream << this->getHour();
+    if(this->getMinute() < 10)
+        ostream << 0;
+    ostream << this->getMinute();
+    if(this->getSecond() < 10)
+        ostream << 0;
+    ostream << this->getSecond();
     return ostream.str();
 }

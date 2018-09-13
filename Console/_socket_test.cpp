@@ -14,7 +14,9 @@ int main() {
         string data = to_string(i);
         data += " hi, testing";
         cout << s.send_((char *) data.c_str()) << endl;
-        cout << s.recv_() << endl;
+        if (s.check_recv_(1000)) {
+            cout << s.recv_() << endl;
+        }
 
         s.shutdown_(_socket::BOTH);
         s.close_();

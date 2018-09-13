@@ -14,7 +14,7 @@ public:
         int iResult = WSAStartup(MAKEWORD(2, 2), Wsadata);
 
         if (iResult != 0) {
-            printf("WSAStartup failed with error: %d\n", iResult);
+            printf("[Error] WSAStartup failed with error: %d\n", iResult);
             return false;
         } else {
             return true;
@@ -31,6 +31,9 @@ public:
 
     ~_socket();
 
+    // mini second
+    bool check_recv_(int);
+
     char *recv_();
 
     int send_(char *);
@@ -43,6 +46,8 @@ public:
     int close_();
 
 private:
+    struct timeval tv;
+    fd_set readfds;
     bool New_char_status;
     int Buffersize;
     char *IP_Address = NULL, *Port = NULL, *RecvBuf = NULL;
