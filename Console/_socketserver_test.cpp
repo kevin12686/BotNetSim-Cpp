@@ -35,7 +35,7 @@ int main() {
 
     server_status = true;
 
-    s = new _socketserver((char *) "6666", 1024);
+    s = new _socketserver((char *) "8888", 1024);
 
     _thread accept_t((int (*)()) accept_thread);
     accept_t.start();
@@ -87,7 +87,6 @@ void client_thread() {
     ReleaseMutex(QMutex);
     string s = client->recv_();
     cout << "From " << client->getIPAddr() << " : " << s << endl;
-    //client->send_((char *) "Good.");
     client->shutdown_(_socket::BOTH);
     client->close_();
     delete client;

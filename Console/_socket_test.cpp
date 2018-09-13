@@ -9,10 +9,12 @@ int main() {
 
     _socket::wsastartup_(&wsadata);
 
-    for (int i = 0; i < 100; i++) {
+    string data;
+    cin >> data;
+
+    for (int i = 0; i < 1; i++) {
         _socket s((char *) "127.0.0.1", (char *) "6666", 1024);
-        string data = to_string(i);
-        data += " hi, testing";
+
         cout << s.send_((char *) data.c_str()) << endl;
         if (s.check_recv_(1000)) {
             cout << s.recv_() << endl;

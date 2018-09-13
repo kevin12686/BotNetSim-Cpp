@@ -1,32 +1,46 @@
 #include <iostream>
+#include <vector>
 #include <set>
+#include <sstream>
 
 using namespace std;
 
-struct Point {
-    int x, y;
+typedef struct POINT {
+    string ip;
+    string port;
+} Point;
 
-    bool operator<(const Point &pt) const {
-        cout << &pt << endl;
-        cout << x << y << endl;
-        cout << pt.x << pt.y << endl;
-        return (x < pt.x) && (y < pt.y);
+Point *ptr = NULL;
+
+vector<Point *> ps;
+
+vector<string> split(const string &str, char delimiter) {
+    vector<string> tokens;
+    string token;
+    istringstream tokenstream(str);
+    while (getline(tokenstream, token, delimiter)) {
+        tokens.push_back(token);
     }
-};
+    return tokens;
+}
+
+void a() {
+    Point *temp = new Point;
+    temp->ip = "haha";
+    temp->port = "ccc";
+    ps.push_back(temp);
+}
+
 
 int main() {
-    set<struct Point> z;
-    struct Point a, b, c;
-    struct Point *w = &a;
-    a.x = 1;
-    a.y = 2;
-    b.x = 1;
-    b.y = 1;
-    c.x = 1;
-    c.y = 1;
-    z.insert(a);
-    z.insert(b);
-    z.insert(c);
-    cout << (*(z.begin())).x << endl;
-    cout << (*(w)).x << endl;
+    cout << ps.size() << endl;
+    a();
+    cout << ps.size() << endl;
+
+    vector<Point *>::iterator it_i;
+    for (it_i = ps.begin(); it_i != ps.end();ps.erase(it_i)) {
+        cout << (*it_i)->ip << endl;
+        cout << (*it_i)->port << endl;
+        delete (*it_i);
+    }
 }
