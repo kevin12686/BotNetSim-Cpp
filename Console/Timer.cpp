@@ -87,11 +87,11 @@ void Timer::setRate(float rate) {
 }
 
 void Timer::timeGoOn() {
-    if (this->TimePass >= 1000) {
+    if (this->TimePass >= 100) {
         short days = this->dayInMonth();
         int temp = this->TimePass;
         this->TimePass %= 1000;
-        int passTime = (int) ((temp - this->TimePass) / 1000 * this->Rate);
+        int passTime = (int) ((temp - this->TimePass) / 100 * this->Rate);
         this->DateTime[5] += passTime;
         // Second
         if (this->DateTime[5] > 59) {

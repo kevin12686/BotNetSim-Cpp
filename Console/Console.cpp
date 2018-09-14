@@ -2,6 +2,7 @@
 #include <vector>
 #include <set>
 #include <sstream>
+#include <random>
 #include "_socketserver.h"
 #include "Timer.h"
 
@@ -9,8 +10,20 @@
 #define BUFSIZE 1024
 // Mini Seconds
 #define IDLE 10000
+// Max Sensor Per Message
+#define SensorPerMsg 50
 
 using namespace std;
+
+typedef struct MYTHREAD {
+    HANDLE handle;
+    DWORD id;
+} MyThread;
+
+typedef struct MYTHOST {
+    string ip;
+    string port;
+} HOST;
 
 // Virtual Timer Thread
 DWORD WINAPI virtual_time(LPVOID);
@@ -24,25 +37,28 @@ DWORD WINAPI handle_client(LPVOID);
 // Sending Virtual Time To Controler
 DWORD WINAPI virtual_broadcast(LPVOID);
 
+// Spreading Bot
+DWORD WINAPI bot_spreading(LPVOID);
+
 vector<string> split(const string &, char);
 
 int classify_msg(string);
 
+int handle_msg(_socket *, string, HOST *);
+
 int handle_msg(_socket *, string);
 
-typedef struct MYTHREAD {
-    HANDLE handle;
-    DWORD id;
-} MyThread;
-
-typedef struct MYTHOST {
-    string ip;
-    string port;
-} HOST;
+int infection(void);
 
 // Setting
-// Growing rate(minutes-VT per 20 bots)
-int GROWRATE = 90;
+// Growing rate(minutes-VT)
+int GROWRATE = 30;
+// Growing Number
+int GROWNUM = 10;
+// Start Growing Threshold
+int GROWT = 10;
+// Initial PeerList Size
+int PLSIZE = 3;
 // Time Spreading Delay(mini seconds-RT)
 short TSD = 200;
 // MsgType Define
@@ -58,12 +74,17 @@ set<HOST *> sensor_set;
 set<HOST *> controler_set;
 set<HOST *> getcha_set;
 
+// random
+random_device rd;
+mt19937_64 generator(rd());
+
 int main() {
     // init
     v_t.setUpdateRate(TSD);
     MyThread timer;
     MyThread server;
     MyThread time_broadcast;
+    MyThread spreading;
 
     // main
     bool console_on = true;
@@ -110,6 +131,21 @@ int main() {
         return 1;
     }
 
+    // bot_spreading
+    spreading.handle = CreateThread(NULL, 0, bot_spreading, (LPVOID) &console_on, 0, &(spreading.id));
+    if (!spreading.handle) {
+        printf("[Error] Bot Spreading Thread Started.\n");
+        console_on = false;
+        WaitForSingleObject(server.handle, INFINITE);
+        CloseHandle(server.handle);
+        WaitForSingleObject(time_broadcast.handle, INFINITE);
+        CloseHandle(time_broadcast.handle);
+        v_t.stop();
+        WaitForSingleObject(timer.handle, INFINITE);
+        CloseHandle(timer.handle);
+        return 1;
+    }
+
     // Make Sure Threads Are On.
     Sleep(1000);
 
@@ -119,11 +155,13 @@ int main() {
 
     // exit
     console_on = false;
-    v_t.stop();
     WaitForSingleObject(server.handle, INFINITE);
     CloseHandle(server.handle);
+    WaitForSingleObject(spreading.handle, INFINITE);
+    CloseHandle(spreading.handle);
     WaitForSingleObject(time_broadcast.handle, INFINITE);
     CloseHandle(time_broadcast.handle);
+    v_t.stop();
     WaitForSingleObject(timer.handle, INFINITE);
     CloseHandle(timer.handle);
     _socket::wsacleanup_();
@@ -228,6 +266,7 @@ DWORD WINAPI handle_client(LPVOID s) {
     // exit
     client->shutdown_(_socket::BOTH);
     client->close_();
+    delete client;
     printf("[INFO] Client Thread Stop.\n");
     return 1;
 }
@@ -252,6 +291,33 @@ DWORD WINAPI virtual_broadcast(LPVOID console) {
     return 1;
 }
 
+DWORD WINAPI bot_spreading(LPVOID console) {
+    printf("[INFO] Bot Spreading Thread Started.\n");
+    bool *console_on = (bool *) console;
+    bool letgo = false;
+    int time_pass = 0;
+    int temp = 0;
+    while (*console_on) {
+        if (letgo) {
+            time_pass += (int) (TSD * v_t.getRate());
+            if (time_pass >= GROWRATE * 60000) {
+                temp = time_pass / GROWRATE / 60000;
+                time_pass %= GROWRATE * 60000;
+                for (int i = 0; i < temp; i++) {
+                    infection();
+                }
+            }
+        } else if (host_set.size() > GROWT) {
+            printf("[INFO] Starting Inflection.\n");
+            letgo = true;
+            infection();
+        }
+        Sleep(TSD);
+    }
+    printf("[INFO] Bot Spreading Thread Stop.\n");
+    return 1;
+}
+
 vector<string> split(const string &str, char delimiter) {
     vector<string> tokens;
     string token;
@@ -273,17 +339,54 @@ int classify_msg(string msg) {
     return -1;
 }
 
-int handle_msg(_socket *client, string msg_data) {
+int handle_msg(_socket *client, string msg_data, HOST *this_host) {
     vector<string> arr;
     HOST *create;
     int msg_type_no = classify_msg(msg_data);
     if (msg_type_no < 0)
         printf("[Warning] Message Token Invalid. Msg: %s\n", msg_data.c_str());
     else {
+        int random_num;
+        string output;
         msg_data.assign(msg_data, msg_token[msg_type_no].length(), msg_data.length() - msg_token[msg_type_no].length());
         switch (msg_type_no) {
             // Request
             case 0:
+                if (this_host) {
+                    msg_data.assign(msg_data, 1, msg_data.length() - 1);
+                    if (msg_data == "Peerlist") {
+                        set<HOST *>::iterator bot_i;
+                        uniform_int_distribution<int> unif(0, bot_set.size() - 1);
+                        output = "Peerlist";
+                        for (int i = 0; i < PLSIZE;) {
+                            random_num = unif(generator);
+                            cout << "random: " << random_num << endl;
+                            bot_i = bot_set.begin();
+                            advance(bot_i, random_num);
+                            if ((*bot_i) != this_host) {
+                                output += ":" + (*bot_i)->ip + ":" + (*bot_i)->port;
+                                i++;
+                            }
+                        }
+                        printf("[INFO] Sending PeerList...(%s)\n", output.c_str());
+                        client->send_((char *) output.c_str());
+                    } else if (msg_data == "Sensorlist") {
+                        set<HOST *>::iterator sensor_i;
+                        uniform_int_distribution<int> unif(0, sensor_set.size() - 1);
+                        output = "Sensorlist";
+                        for (int i = 0; i < sensor_set.size() > SensorPerMsg ? SensorPerMsg : sensor_set.size();) {
+                            random_num = unif(generator);
+                            sensor_i = sensor_set.begin();
+                            advance(sensor_i, random_num);
+                            if (*sensor_i != this_host) {
+                                output += ":" + (*sensor_i)->ip + ":" + (*sensor_i)->port;
+                                i++;
+                            }
+                        }
+                        printf("[INFO] Sending SensorList...(%s)\n", output.c_str());
+                        client->send_((char *) output.c_str());
+                    }
+                }
                 break;
 
                 // HOST
@@ -325,4 +428,80 @@ int handle_msg(_socket *client, string msg_data) {
         }
     }
     return msg_type_no;
+}
+
+int handle_msg(_socket *client, string msg_data) {
+    HOST *this_host = NULL;
+    return handle_msg(client, msg_data, this_host);
+}
+
+int infection(void) {
+    int random_num;
+    set<HOST *>::iterator host_i;
+    vector<HOST *> target_list;
+    vector<_socket *> client_list;
+    HOST *target = NULL;
+    string recv_data;
+    if (host_set.size() > GROWT && host_set.size() > GROWNUM) {
+        printf("[INFO] Infecting...\n");
+        for (int i = 0; i < GROWNUM; i++) {
+            uniform_int_distribution<int> unif(0, bot_set.size() - 1);
+            random_num = unif(generator);
+            host_i = host_set.begin();
+            advance(host_i, random_num);
+            target = *host_i;
+            target_list.push_back(target);
+            bot_set.insert(target);
+            host_set.erase(host_i);
+
+            _socket *client = new _socket((char *) ((target->ip).c_str()), (char *) ((target->port).c_str()), BUFSIZE);
+            client->send_((char *) "Change:Bot");
+            client_list.push_back(client);
+        }
+
+        vector<HOST *>::iterator target_i;
+        vector<_socket *>::iterator client_i;
+
+        for (target_i = target_list.begin(), client_i = client_list.begin();
+             target_i != target_list.end() && client_i != client_list.end();
+             target_list.erase(target_i), client_list.erase(client_i)) {
+
+            // process
+            bool recv_loop = true;
+            char *msg_ptr = NULL;
+            while (recv_loop) {
+                if ((*client_i)->check_recv_(IDLE)) {
+                    msg_ptr = (*client_i)->recv_();
+                    if (msg_ptr) {
+                        printf("MSG: %s\n", msg_ptr);
+                        int token_id = handle_msg(*client_i, msg_ptr, *target_i);
+                        if (token_id != 0) {
+                            recv_loop = false;
+                            if (token_id != 3) {
+                                printf("[Warning] Bot Unable To Start Up.\n");
+                                host_set.insert(*target_i);
+                                bot_set.erase(bot_set.find(*target_i));
+                            }
+                        }
+                    } else {
+                        recv_loop = false;
+                        printf("[Warning] Bot Unable To Start Up.\n");
+                        host_set.insert(*target_i);
+                        bot_set.erase(bot_set.find(*target_i));
+                    }
+                } else {
+                    recv_loop = false;
+                    printf("[Warning] Socket Timeout or Error.\n");
+                    printf("[Warning] Bot Unable To Start Up.\n");
+                    host_set.insert(*target_i);
+                    bot_set.erase(bot_set.find(*target_i));
+                }
+            }
+
+            (*client_i)->shutdown_(_socket::BOTH);
+            (*client_i)->close_();
+            delete *client_i;
+        }
+    }
+    return 1;
 }
