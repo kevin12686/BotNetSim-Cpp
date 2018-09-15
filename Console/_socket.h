@@ -31,6 +31,8 @@ public:
 
     ~_socket();
 
+    bool get_status();
+
     // mini second
     bool check_recv_(int);
 
@@ -46,6 +48,7 @@ public:
     int close_();
 
 private:
+    bool status;
     struct timeval tv;
     fd_set readfds;
     bool New_char_status;

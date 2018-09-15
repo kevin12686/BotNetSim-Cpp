@@ -2,7 +2,8 @@
 #include <vector>
 #include <set>
 #include <sstream>
-#include <random>
+#include <algorithm>
+#include <ctime>
 #include "_socketserver.h"
 #include "Timer.h"
 
@@ -24,6 +25,12 @@ typedef struct MYTHOST {
     string ip;
     string port;
 } HOST;
+
+struct HOSTPtrComp {
+    bool operator()(const HOST *lhs, const HOST *rhs) const {
+        return lhs->ip + lhs->port < rhs->ip + rhs->port;
+    }
+};
 
 // Virtual Timer Thread
 DWORD WINAPI virtual_time(LPVOID);
@@ -56,7 +63,7 @@ int GROWRATE = 30;
 // Growing Number
 int GROWNUM = 10;
 // Start Growing Threshold
-int GROWT = 10;
+int GROWT = 15;
 // Initial PeerList Size
 int PLSIZE = 3;
 // Time Spreading Delay(mini seconds-RT)
@@ -67,16 +74,14 @@ string msg_token[] = {"Request", "HOST", "CTRL", "EXIT", "R"};
 // Global Variables
 // init
 Timer v_t(100.0);
-set<HOST *> host_set;
-set<HOST *> bot_set;
-set<HOST *> crawler_set;
-set<HOST *> sensor_set;
-set<HOST *> controler_set;
-set<HOST *> getcha_set;
+set<HOST *, HOSTPtrComp> host_set;
+set<HOST *, HOSTPtrComp> bot_set;
+set<HOST *, HOSTPtrComp> crawler_set;
+set<HOST *, HOSTPtrComp> sensor_set;
+set<HOST *, HOSTPtrComp> controler_set;
+set<HOST *, HOSTPtrComp> getcha_set;
 
 // random
-random_device rd;
-mt19937_64 generator(rd());
 
 int main() {
     // init
@@ -85,6 +90,7 @@ int main() {
     MyThread server;
     MyThread time_broadcast;
     MyThread spreading;
+    srand(unsigned(time(NULL)));
 
     // main
     bool console_on = true;
@@ -150,8 +156,59 @@ int main() {
     Sleep(1000);
 
     // User Interface
-    printf("Press Enter To Exit.\n");
-    getchar();
+    printf("\n");
+    printf("quit : Stop the Application\ntime_rate : Get Current Time Rate\n");
+    printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
+    printf("list_bot : List Bot\nlist_ctrl : List Controler\n");
+    printf("list_crawler : List Crawler\nlist_sensor : List Sensor\n");
+    printf("list_getcha : List Getcha\nglobal : Global Status\n");
+    printf("timestamp : Current Timestamp\n");
+    string UserCommand = "";
+    while (UserCommand != "quit") {
+        cin >> UserCommand;
+        transform(UserCommand.begin(), UserCommand.end(), UserCommand.begin(), ::tolower);
+        if (UserCommand == "time_rate") {
+            printf("Current Rate: %f\n", v_t.getRate());
+        } else if (UserCommand == "update_rate") {
+            printf("Current Rate: %d\n", TSD);
+        } else if (UserCommand == "list_host") {
+            printf("Host List\n");
+            for (auto i : host_set) {
+                printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
+            }
+        } else if (UserCommand == "list_bot") {
+            printf("Bot List\n");
+            for (auto i : bot_set) {
+                printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
+            }
+        } else if (UserCommand == "list_ctrl") {
+            printf("Controler List\n");
+            for (auto i : controler_set) {
+                printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
+            }
+        } else if (UserCommand == "list_crawler") {
+            printf("Crawler List\n");
+            for (auto i : crawler_set) {
+                printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
+            }
+        } else if (UserCommand == "list_sensor") {
+            printf("Sensor List\n");
+            for (auto i : sensor_set) {
+                printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
+            }
+        } else if (UserCommand == "list_getcha") {
+            printf("Getcha List\n");
+            for (auto i : getcha_set) {
+                printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
+            }
+        } else if (UserCommand == "global") {
+            printf("Host Number: %d\nBot Number: %d\nControler Number: %d\nCrawler Number: %d\nSensor Number: %d\nGetcha Number: %d\n",
+                   host_set.size(), bot_set.size(), controler_set.size(), crawler_set.size(), sensor_set.size(),
+                   getcha_set.size());
+        } else if (UserCommand == "timestamp") {
+            printf("timestamp: %s\n", v_t.timestamp().c_str());
+        }
+    }
 
     // exit
     console_on = false;
@@ -166,7 +223,7 @@ int main() {
     CloseHandle(timer.handle);
     _socket::wsacleanup_();
 
-    set<HOST *>::iterator it_i;
+    set<HOST *, HOSTPtrComp>::iterator it_i;
     if (!host_set.empty()) {
         for (it_i = host_set.begin(); it_i != host_set.end(); host_set.erase(it_i++)) {
             delete *it_i;
@@ -209,21 +266,24 @@ DWORD WINAPI virtual_time(LPVOID null) {
 DWORD WINAPI server_accept(LPVOID console) {
     printf("[INFO] Server Thread Started.\n");
     bool *console_on = (bool *) console;
-    _socketserver server((char *) PORT, BUFSIZE);
     vector<MyThread *> t_v;
-    while (*console_on) {
-        if (server.check_connect_(500)) {
-            _socket *client = server.accept_();
-            if (client) {
-                MyThread *temp = new MyThread;
-                temp->handle = CreateThread(NULL, 0, handle_client, (LPVOID) client, 0, &(temp->id));
-                if (temp->handle) {
-                    printf("[INFO] Client Accepted.\n");
-                    t_v.push_back(temp);
+    _socketserver server((char *) PORT, BUFSIZE);
+    if (server.get_status()) {
+        while (*console_on) {
+            if (server.check_connect_(500)) {
+                _socket *client = server.accept_();
+                if (client) {
+                    MyThread *temp = new MyThread;
+                    temp->handle = CreateThread(NULL, 0, handle_client, (LPVOID) client, 0, &(temp->id));
+                    if (temp->handle) {
+                        printf("[INFO] Client Accepted.\n");
+                        t_v.push_back(temp);
+                    }
                 }
             }
         }
-    }
+    } else
+        printf("[Error] Server Can Not Start.");
 
     // exit
     server.close_();
@@ -275,13 +335,21 @@ DWORD WINAPI virtual_broadcast(LPVOID console) {
     printf("[INFO] Time Broadcast Thread Started.\n");
     bool *console_on = (bool *) console;
     while (*console_on) {
-        set<HOST *>::iterator it_i;
+        set<HOST *, HOSTPtrComp>::iterator it_i;
         if (!controler_set.empty()) {
             for (it_i = controler_set.begin(); it_i != controler_set.end(); it_i++) {
                 _socket client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(), BUFSIZE);
-                string time_msg = "T" + v_t.timestamp();
-                client.send_((char *) time_msg.c_str());
-                client.shutdown_(_socket::BOTH);
+                if (client.get_status()) {
+                    string time_msg = "T" + v_t.timestamp();
+                    if (client.send_((char *) time_msg.c_str()) == -1) {
+                        printf("[Warning] Controler %s:%s Time Broadcast Failed.\n", ((*it_i)->ip).c_str(),
+                               ((*it_i)->port).c_str());
+                    }
+                    client.shutdown_(_socket::BOTH);
+                } else {
+                    printf("[Warning] Controler %s:%s Time Broadcast Failed.\n", ((*it_i)->ip).c_str(),
+                           ((*it_i)->port).c_str());
+                }
                 client.close_();
             }
         }
@@ -293,6 +361,7 @@ DWORD WINAPI virtual_broadcast(LPVOID console) {
 
 DWORD WINAPI bot_spreading(LPVOID console) {
     printf("[INFO] Bot Spreading Thread Started.\n");
+    srand(unsigned(time(NULL)));
     bool *console_on = (bool *) console;
     bool letgo = false;
     int time_pass = 0;
@@ -352,39 +421,49 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
         switch (msg_type_no) {
             // Request
             case 0:
-                if (this_host) {
-                    msg_data.assign(msg_data, 1, msg_data.length() - 1);
-                    if (msg_data == "Peerlist") {
-                        set<HOST *>::iterator bot_i;
-                        uniform_int_distribution<int> unif(0, bot_set.size() - 1);
+                msg_data.assign(msg_data, 1, msg_data.length() - 1);
+                if (true) {
+                    set<HOST *, HOSTPtrComp> random_list;
+                    if (this_host && msg_data == "Peerlist") {
+                        set<HOST *, HOSTPtrComp> my_list(bot_set.begin(), bot_set.end());
+                        my_list.erase(my_list.find(this_host));
+                        set<HOST *, HOSTPtrComp>::iterator bot_i;
                         output = "Peerlist";
-                        for (int i = 0; i < PLSIZE;) {
-                            random_num = unif(generator);
-                            cout << "random: " << random_num << endl;
-                            bot_i = bot_set.begin();
+                        while (random_list.size() < PLSIZE) {
+                            random_num = rand() % my_list.size();
+                            bot_i = my_list.begin();
                             advance(bot_i, random_num);
-                            if ((*bot_i) != this_host) {
-                                output += ":" + (*bot_i)->ip + ":" + (*bot_i)->port;
-                                i++;
-                            }
+                            random_list.insert(*bot_i);
+                            my_list.erase(bot_i);
                         }
+                        for (auto host : random_list) {
+                            output += ":" + host->ip + ":" + host->port;
+                        }
+                        random_list.clear();
                         printf("[INFO] Sending PeerList...(%s)\n", output.c_str());
-                        client->send_((char *) output.c_str());
+                        if (client->send_((char *) output.c_str()) == -1) {
+                            printf("[Warning] Host %s:%s Sending PeerList Failed.\n", (this_host->ip).c_str(),
+                                   (this_host->port).c_str());
+                        }
                     } else if (msg_data == "Sensorlist") {
-                        set<HOST *>::iterator sensor_i;
-                        uniform_int_distribution<int> unif(0, sensor_set.size() - 1);
+                        set<HOST *, HOSTPtrComp>::iterator sensor_i;
                         output = "Sensorlist";
-                        for (int i = 0; i < sensor_set.size() > SensorPerMsg ? SensorPerMsg : sensor_set.size();) {
-                            random_num = unif(generator);
+                        while (random_list.size() < sensor_set.size() > SensorPerMsg ? SensorPerMsg
+                                                                                     : sensor_set.size()) {
+                            random_num = rand() % sensor_set.size();
                             sensor_i = sensor_set.begin();
                             advance(sensor_i, random_num);
-                            if (*sensor_i != this_host) {
-                                output += ":" + (*sensor_i)->ip + ":" + (*sensor_i)->port;
-                                i++;
-                            }
+                            random_list.insert(*sensor_i);
                         }
+
+                        for (auto host : random_list) {
+                            output += ":" + host->ip + ":" + host->port;
+                        }
+                        random_list.clear();
                         printf("[INFO] Sending SensorList...(%s)\n", output.c_str());
-                        client->send_((char *) output.c_str());
+                        if (client->send_((char *) output.c_str()) == -1) {
+                            printf("[Warning] Sending SensorList Failed.\n");
+                        }
                     }
                 }
                 break;
@@ -396,7 +475,9 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 create->ip = arr.at(0);
                 create->port = arr.at(1);
                 host_set.insert(create);
-                client->send_((char *) "OK");
+                if (client->send_((char *) "OK") == -1) {
+                    printf("[Warning] Host %s:%s Register Failed.\n", (create->ip).c_str(), (create->port).c_str());
+                }
                 break;
 
                 // CTRL
@@ -437,26 +518,33 @@ int handle_msg(_socket *client, string msg_data) {
 
 int infection(void) {
     int random_num;
-    set<HOST *>::iterator host_i;
+    set<HOST *, HOSTPtrComp>::iterator host_i;
     vector<HOST *> target_list;
     vector<_socket *> client_list;
     HOST *target = NULL;
     string recv_data;
     if (host_set.size() > GROWT && host_set.size() > GROWNUM) {
         printf("[INFO] Infecting...\n");
-        for (int i = 0; i < GROWNUM; i++) {
-            uniform_int_distribution<int> unif(0, bot_set.size() - 1);
-            random_num = unif(generator);
+        for (int i = 0; i < GROWNUM;) {
+            random_num = rand() % host_set.size();
             host_i = host_set.begin();
             advance(host_i, random_num);
             target = *host_i;
-            target_list.push_back(target);
-            bot_set.insert(target);
-            host_set.erase(host_i);
-
             _socket *client = new _socket((char *) ((target->ip).c_str()), (char *) ((target->port).c_str()), BUFSIZE);
-            client->send_((char *) "Change:Bot");
-            client_list.push_back(client);
+            if (client->get_status()) {
+                if (client->send_((char *) "Change:Bot") == -1) {
+                    printf("[Warning] HOST %s:%s Change Bot Failed.\n", (target->ip).c_str(), (target->port).c_str());
+                    delete client;
+                } else {
+                    client_list.push_back(client);
+                    target_list.push_back(target);
+                    bot_set.insert(target);
+                    host_set.erase(host_i);
+                    i++;
+                }
+            } else {
+                delete client;
+            }
         }
 
         vector<HOST *>::iterator target_i;

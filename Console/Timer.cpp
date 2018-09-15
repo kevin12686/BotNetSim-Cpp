@@ -87,11 +87,11 @@ void Timer::setRate(float rate) {
 }
 
 void Timer::timeGoOn() {
-    if (this->TimePass >= 100) {
+    if (this->TimePass >= 1000) {
         short days = this->dayInMonth();
         int temp = this->TimePass;
         this->TimePass %= 1000;
-        int passTime = (int) ((temp - this->TimePass) / 100 * this->Rate);
+        int passTime = (temp - this->TimePass) / 1000;
         this->DateTime[5] += passTime;
         // Second
         if (this->DateTime[5] > 59) {
@@ -132,7 +132,7 @@ void Timer::run() {
     this->Run = true;
     while (this->Run) {
         Sleep(this->UpdateRate);
-        this->TimePass += this->UpdateRate;
+        this->TimePass += (int) (this->UpdateRate * this->Rate);
         this->timeGoOn();
         if (this->Debug) {
             std::cout << "[Debug INFO] " << this->timestamp() << std::endl;
@@ -196,19 +196,19 @@ std::string Timer::toString() {
 std::string Timer::timestamp() {
     std::ostringstream ostream;
     ostream << this->getYear();
-    if(this->getMonth() < 10)
+    if (this->getMonth() < 10)
         ostream << 0;
     ostream << this->getMonth();
-    if(this->getDay() < 10)
+    if (this->getDay() < 10)
         ostream << 0;
     ostream << this->getDay();
-    if(this->getHour() < 10)
+    if (this->getHour() < 10)
         ostream << 0;
     ostream << this->getHour();
-    if(this->getMinute() < 10)
+    if (this->getMinute() < 10)
         ostream << 0;
     ostream << this->getMinute();
-    if(this->getSecond() < 10)
+    if (this->getSecond() < 10)
         ostream << 0;
     ostream << this->getSecond();
     return ostream.str();
