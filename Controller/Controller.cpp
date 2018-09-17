@@ -4,8 +4,6 @@
 #include "_thread.h"
 #include <sstream>
 #include <iomanip>
-#include <assert.h>
-#include <thread>
 #include <map>
 #include <algorithm>
 #include "_socket.h"
@@ -48,7 +46,7 @@ char *CONSOLE_IP_ADDRESS;
 char *LOCAL_IP_ADDRESS;
 int LOCAL_TIMEZONE;
 
-bool controller_debug = false;
+bool CONTROL_DEBUG = false;
 
 int main(int argc, char *argv[]) {
     if (argc != 4) {
@@ -88,7 +86,6 @@ int main(int argc, char *argv[]) {
     if (socket2Console.send_(msg) == -1) {
         cout << "Send Message To Console Failed" << endl;
     }
-    socket2Console.shutdown_(_socket::BOTH);
     socket2Console.close_();
 
 
@@ -159,7 +156,7 @@ void socketAccept() {
     while (server_status) {
         flag = listenSocket->check_connect_(1000);
         if (flag) {
-            if (controller_debug) {
+            if (CONTROL_DEBUG) {
                 cout << "Somebody connected." << endl;
             }
 
@@ -187,7 +184,7 @@ void messageHandle() {
     ReleaseMutex(QMutex);
 
     char *message = clientS->recv_();
-    if (controller_debug) {
+    if (CONTROL_DEBUG) {
         cout << "From " << clientS->getIPAddr() << " : " << message << endl;
     }
     char msg_type = message[0];
@@ -205,7 +202,6 @@ void messageHandle() {
                 if (sConnect.send_(datetime) == -1) {
                     disconnect[host[i]]++;
                 }
-                sConnect.shutdown_(_socket::BOTH);
                 sConnect.close_();
             }
         }
@@ -223,7 +219,7 @@ void messageHandle() {
         // host Register
         char *host_port = (char *) calloc(6, sizeof(char));
         memcpy(host_port, &message[1], strlen(message) - 1);
-        if ( host.empty() || host.end() != find(host.begin(), host.end(), host_port)) {
+        if ( host.empty() || host.end() == find(host.begin(), host.end(), host_port)) {
             host.push_back(host_port);
             disconnect[host_port] = 0;
             clientS->send_((char *) "OK");
@@ -232,7 +228,6 @@ void messageHandle() {
     } else {
         cout << "[Message] receive other type of message" << endl;
     }
-    clientS->shutdown_(_socket::BOTH);
     clientS->close_();
     delete clientS;
 
@@ -260,7 +255,6 @@ void report() {
             char *cstr = new char[msg.length() + 1];
             strcpy(cstr, msg.c_str());
             s.send_(cstr);
-            s.shutdown_(_socket::BOTH);
             s.close_();
 
         }
@@ -279,7 +273,6 @@ void revive() {
                     if (test_socket.send_((char *) "TEST") != -1) {
                         it->second = 0;
                     }
-                    test_socket.shutdown_(_socket::BOTH);
                     test_socket.close_();
                 }
             }
