@@ -1,0 +1,25 @@
+cmake_minimum_required(VERSION 3.10)
+project(Controller)
+
+set(CMAKE_CXX_STANDARD 11)
+
+add_library(Timer Timer.h Timer.cpp)
+add_library(_thread _thread.h _thread.cpp)
+add_library(_socket _socket.h _socket.cpp _socket_test.cpp _thread_test.cpp _socketserver_test.cpp)
+add_library(_socketserver _socketserver.h _socketserver.cpp)
+
+add_executable(Controller Controller.cpp)
+add_executable(Console Console.cpp)
+add_executable(_thread_test _thread_test.cpp)
+add_executable(_socket_test _socket_test.cpp)
+add_executable(_socketserver_test _socketserver_test.cpp)
+
+if (WIN32)
+    target_link_libraries(_socket ws2_32)
+    target_link_libraries(_thread_test _thread)
+    target_link_libraries(_socket_test _socket _thread _socketserver)
+    target_link_libraries(_socketserver_test _thread _socket _socketserver)
+    target_link_libraries(Controller _thread _socket _socketserver)
+    target_link_libraries(Console _socket _socketserver Timer)
+    set(CMAKE_CXX_FLAGS "-static-libgcc -static-libstdc++")
+endif ()
