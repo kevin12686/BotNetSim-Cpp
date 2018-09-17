@@ -8,7 +8,6 @@ add_library(_socketserver _socketserver.h _socketserver.cpp)
 
 
 add_executable(Main main.cpp )
-add_executable(Test server.cpp )
 add_executable(Multiprocess multiprocessing.cpp )
 
 if (WIN32)

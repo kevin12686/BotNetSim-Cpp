@@ -6,7 +6,7 @@
 #include <mutex>
 using namespace std;
 
-int register_ip();
+void register_ip();
 void accept_thread();
 void client_thread();
 void bot();
@@ -36,8 +36,8 @@ vector<_thread *> ClientT;          // Collect _thread
 _socketserver *s;
 bool server_status = false;
 bool debug_mode = false;
-char my_ip[15] = "140.134.27.119", my_port[15] = "1000";
-char c_ip[15] = "140.134.27.117", c_port[15] = "6666";
+char my_ip[15] = "127.0.0.1", my_port[15] = "8000";
+char c_ip[15] = "127.0.0.1", c_port[15] = "6666";
 char* Concole_IP =  c_ip, * Concole_Port = c_port;
 char time_stamp[15] = "20180823115900";
 const int MAXPLNum = 15 ;
@@ -45,11 +45,22 @@ int register_flag = -1; // Bot = 1, Crawler = 2, Sensor = 3
 
 int main(int argc, char* argv[]) {
     change_mtx.lock();
-    printf("[0]:%s\n",argv[0]);
-    printf("[1]:%s\n",argv[1]);
+
     strcpy(my_ip,argv[0]);
     strcpy(my_port,argv[1]);
-    cout << my_ip << ":" << my_port << endl;
+    strcpy(c_ip,argv[2]);
+    strcpy(c_port,argv[3]);
+    if(strcmp(argv[4],"Y") == 0){
+        printf("[OPEN Debug Mode]\n");
+        debug_mode = true;
+    }
+    else{
+        printf("[Colse Debug Mode]\n");
+        debug_mode = false;
+    }
+
+    cout << "Host :" << my_ip << ":" << my_port << endl;
+    cout << "Console :" << c_ip << ":" << c_port << endl << endl;
     _socket::Debug = false;
     // 初始化 Mutex
     QMutex = CreateMutex(NULL, false, NULL);
@@ -76,14 +87,14 @@ int main(int argc, char* argv[]) {
 
     // 建立Server
     server_status = true;
-    s = new _socketserver((char *) my_port, 1024); // Port到時候由 main 參數給入
+    s = new _socketserver((char *) my_port, 1024);
     if(!s->get_status()) // 檢查port是否可用
         return -1;
 
     _thread accept_t((int (*)()) accept_thread);
     accept_t.start();
 
-    register_flag = register_ip();   // 與Console註冊
+    register_ip();   // 與Console註冊
 
     change_mtx.lock(); // 鎖住，等待 Change 指令
 
@@ -102,10 +113,13 @@ int main(int argc, char* argv[]) {
 
     int inst = 0;
     int num = 0;
+    printf("\n----------------------------------\n");
+    printf("-----Input '1'  :Peerlist Size----\n");
+    printf("-----Input '3'  :Peerlist IP------\n");
+    printf("-----Input '-1' :Exit-------------\n");
+    printf("----------------------------------\n");
     while(1){
-        //printf("Input '1'  :Peerlist_Size\n");
-        //printf("Input '2','X'  :Peerlist_IP\n");
-        //printf("Input '-1' :Exit\n\n");
+
         scanf("%d",&inst);
         if(inst == 1)
             cout << my_ip <<":"<< my_port << "-->" <<"Peerlise_Size :" << vec_peerlist.size() << endl;
@@ -132,8 +146,7 @@ int main(int argc, char* argv[]) {
     system("pause");
     return 0;
 }
-int register_ip(){
-    int ctrl_flag = -1;
+void register_ip(){
 
     char *send_data = new char[1024];
     char *rec_data = new char[1024];
@@ -168,12 +181,12 @@ int register_ip(){
                 memset(rec_data,'\0',1024);
                 rec_data = c.recv_();
                 if(rec_data){
-                    if(register_flag == 1){
+                    if(register_flag == 1){            // Bot
                         c.send_((char *)"EXIT" );
                         handle_recv_mes(rec_data);
                         change_mtx.unlock();
                     }
-                    else if(register_flag == 2){
+                    else if(register_flag == 2){        //  Crawler 要求 Sensorlist
                         c.send_((char *)"Request:Sensorlist" );
                         memset(rec_data,'\0',1024);
                         rec_data = c.recv_();
@@ -182,23 +195,19 @@ int register_ip(){
                             handle_recv_mes(rec_data);
                             change_mtx.unlock();
                         }
+                        else{
+                            if(debug_mode)
+                                printf("[INFO] Request Sensorlist failed\n");
+                        }
                     }
-
                 }
                 else{
                     if(debug_mode)
-                        printf("Request PL failed\n");
+                        printf("[INFO] Request Peerlist failed\n");
                     register_flag = -1;
                 }
-
-                if(register_flag == 2){                  //  Crawler 要求 Sensorlist
-                    c.send_((char *) "Request:Sensorlist");
-                    rec_data = c.recv_();
-                    if(rec_data)
-                        handle_recv_mes(rec_data);
-                }
             }
-            else if(register_flag == 3){
+            else if(register_flag == 3){            // Sensor
                 change_mtx.unlock();
             }
         }
@@ -207,6 +216,8 @@ int register_ip(){
         }
     }
     else{
+        if(debug_mode)
+            printf("[INFO] Register Console failed\n");
         register_flag = -1;
     }
     c.shutdown_(_socket::BOTH);
@@ -221,7 +232,12 @@ int register_ip(){
     rec_data = ctrl.recv_();
     if(rec_data){
         if(strcmp(rec_data,"OK") == 0 )
-            ctrl_flag = 1;
+            if(debug_mode)
+                printf("[Receive] Controller :OK\n");
+    }
+    else{
+        if(debug_mode)
+            printf("[INFO] Register Controller failed\n\n");
     }
     ctrl.shutdown_(_socket::BOTH);
     ctrl.close_();
@@ -229,7 +245,6 @@ int register_ip(){
     register_flag = 1; // Bot
     delete[] send_data;
     delete[] rec_data;
-    return register_flag;
 }
 
 void accept_thread() {
@@ -247,7 +262,6 @@ void accept_thread() {
             t->start();
             ClientT.push_back(t);
         }
-        Sleep(1000);
     }
     vector<_thread *>::iterator it_i;
     for (it_i = ClientT.begin(); it_i != ClientT.end(); it_i++) {
@@ -266,6 +280,7 @@ void client_thread() {
     char rec_flag;
     char send_data[1024]={};
     memset(send_data,'\0',1024);
+
     rec_data = client->recv_();
     if(rec_data){
         //cout << "From " << client->getIPAddr() << " : " << rec_data << endl;
@@ -278,7 +293,6 @@ void client_thread() {
                 handle_send_mes(rec_flag,send_data);
                 client->send_(send_data);
             }
-
         }
         else if(rec_flag == 'D'){
             send_mes('D');
@@ -308,7 +322,7 @@ void client_thread() {
             }
             else{
                 if(debug_mode)
-                    printf("Request PL failed\n");
+                    printf("[INFO] Request Peerlist failed\n");
                 register_flag = -1;
             }
         }
@@ -318,7 +332,7 @@ void client_thread() {
         }
     }
 
-    client->shutdown_(_socket::BOTH);
+    //client->shutdown_(_socket::BOTH);
     client->close_();
     delete client;
     delete[] rec_data;
@@ -372,7 +386,7 @@ void send_mes(char flag){
         if(rec_data){
             handle_recv_mes(rec_data);
         }
-        c.shutdown_(_socket::BOTH);
+        //c.shutdown_(_socket::BOTH);
         c.close_();
     }
     else if(flag =='D'){    // DDOS
@@ -380,7 +394,7 @@ void send_mes(char flag){
             _socket c( vec_peerlist[i].IP,  vec_peerlist[i].Port, 1024); // socket
             c.send_(send_data );
 
-            c.shutdown_(_socket::BOTH);
+            //c.shutdown_(_socket::BOTH);
             c.close_();
             Sleep(500);
         }
@@ -389,7 +403,7 @@ void send_mes(char flag){
         _socket c( my_ip, (char *) "1999", 1024);
         c.send_(send_data );
 
-        c.shutdown_(_socket::BOTH);
+        //c.shutdown_(_socket::BOTH);
         c.close_();
     }
     delete[] rec_data;
@@ -492,7 +506,8 @@ char handle_recv_mes(char data[]) {
             case 1 :
                 if(update_time_flag){
                     strcpy(time_stamp,buf); // 更新時間
-                    //printf("Update Time:%s\n",time_stamp);
+                    if(debug_mode)
+                        printf("[Update Time] :%s\n",time_stamp);
                     return 'T';
                 }
                 else{
@@ -561,13 +576,13 @@ char handle_recv_mes(char data[]) {
                 break;
             case 6 :
                 strcpy(client_port,buf);
-                //printf("From %s:%s--->[%s]\n",client_ip,client_port,output);
                 break;
         }
         buf=strtok(NULL,p);
         count++;
     }
-
+    if(debug_mode)
+        printf("[Receive] %s:%s--->[%s]\n",client_ip,client_port,output);
     return rtn_flag;
 }
 
