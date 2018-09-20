@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
-#include <windows.h>
+
+#include "_socket.h"
 
 using namespace std;
 
@@ -59,10 +60,29 @@ int main() {
         temp++;
         Sleep(10);
     }
+    
+    char instr[10]={};
+    WSADATA wsadata;
+    _socket::wsastartup_(&wsadata);
+    while(1){
+        scanf("%s",instr);
+        if(strcmp(instr,"EXIT") == 0){
+            char send_port[10] = {};
+            temp = atoi(port);
+            for (int i = 0; i < process_num; i++){
+                sprintf(send_port, "%d", temp);
+                _socket s((char *) "127.0.0.1", send_port, 1024);
+                s.send_((char *) "Kill");
+                temp++;
+            }
+            system("pause");
+            return 0;
+        }
 
-    //cout << "-----------waitting" << endl;
-    WaitForSingleObject(information.hProcess, INFINITE);
-    CloseHandle(information.hProcess);
+    }
+
+    // WaitForSingleObject(information.hProcess, INFINITE);
+    //CloseHandle(information.hProcess);
     cout << "-----------closing" << endl;
     system("pause");
     return 0;

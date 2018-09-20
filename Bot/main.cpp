@@ -51,16 +51,18 @@ int main(int argc, char* argv[]) {
     strcpy(c_ip,argv[2]);
     strcpy(c_port,argv[3]);
     if(strcmp(argv[4],"Y") == 0){
-        printf("[OPEN Debug Mode]\n");
+        if(debug_mode)
+            printf("[OPEN Debug Mode]\n");
         debug_mode = true;
     }
-    else{
-        printf("[Colse Debug Mode]\n");
+    else
         debug_mode = false;
+
+    if(debug_mode){
+        cout << "Host :" << my_ip << ":" << my_port << endl;
+        cout << "Console :" << c_ip << ":" << c_port << endl << endl;
     }
 
-    cout << "Host :" << my_ip << ":" << my_port << endl;
-    cout << "Console :" << c_ip << ":" << c_port << endl << endl;
     _socket::Debug = false;
     // 初始化 Mutex
     QMutex = CreateMutex(NULL, false, NULL);
@@ -113,37 +115,37 @@ int main(int argc, char* argv[]) {
 
     int inst = 0;
     int num = 0;
-    printf("\n----------------------------------\n");
-    printf("-----Input '1'  :Peerlist Size----\n");
-    printf("-----Input '3'  :Peerlist IP------\n");
-    printf("-----Input '-1' :Exit-------------\n");
-    printf("----------------------------------\n");
-    while(1){
-
-        scanf("%d",&inst);
-        if(inst == 1)
-            cout << my_ip <<":"<< my_port << "-->" <<"Peerlise_Size :" << vec_peerlist.size() << endl;
-        else if(inst == 2){
-            scanf("%d",&num);
-            cout << vec_peerlist[num].IP << ":" << vec_peerlist[num].Port << endl << endl;
+    if(debug_mode){
+        printf("\n----------------------------------\n");
+        printf("-----Input '1'  :Peerlist Size----\n");
+        printf("-----Input '3'  :Peerlist IP------\n");
+        printf("-----Input '-1' :Exit-------------\n");
+        printf("----------------------------------\n");
+        while(server_status){
+            scanf("%d",&inst);
+            if(inst == 1)
+                cout << my_ip <<":"<< my_port << "-->" <<"Peerlise_Size :" << vec_peerlist.size() << endl;
+            else if(inst == 2){
+                scanf("%d",&num);
+                cout << vec_peerlist[num].IP << ":" << vec_peerlist[num].Port << endl << endl;
+            }
+            else if(inst == 3){
+                int len = vec_peerlist.size();
+                for(int i=0;i < len;i++)
+                    cout << vec_peerlist[i].IP << ":" << vec_peerlist[i].Port <<endl;
+            }
+            else if(inst == -1)
+                break;
         }
-        else if(inst == 3){
-            int len = vec_peerlist.size();
-            for(int i=0;i < len;i++)
-                cout << vec_peerlist[i].IP << ":" << vec_peerlist[i].Port <<endl;
-        }
-        else if(inst == -1)
-            break;
     }
 
-    getchar();
+
     server_status = false;
     accept_t.join();
     // 清理垃圾
     delete (s);
     _socket::wsacleanup_();
     CloseHandle(QMutex);
-    system("pause");
     return 0;
 }
 void register_ip(){
@@ -459,7 +461,12 @@ char handle_recv_mes(char data[]) {
     while(buf){
         switch(count){
             case 0 :
-                if(strcmp(buf,"T") == 0 )
+                if(strcmp(buf,"Kill") == 0 ){  // 關閉程式
+                    server_status = false;
+                    change_mtx.unlock();
+                    return 'N';
+                }
+                else if(strcmp(buf,"T") == 0 )
                     update_time_flag = true;
                 else if(strcmp(buf,"Change") == 0){
                     buf=strtok(NULL,p);
