@@ -35,7 +35,7 @@ int main() {
 
     server_status = true;
 
-    s = new _socketserver((char *) "8888", 1024);
+    s = new _socketserver((char *) "9004", 1024);
 
     _thread accept_t((int (*)()) accept_thread);
     accept_t.start();
@@ -87,6 +87,14 @@ void client_thread() {
     ReleaseMutex(QMutex);
     string s = client->recv_();
     cout << "From " << client->getIPAddr() << " : " << s << endl;
+    /*
+    client->send_((char *) "Request:Peerlist");
+    cout << "Request:Peerlist sent." << endl;
+    s = client->recv_();
+    cout << "From " << client->getIPAddr() << " : " << s << endl;
+    client->send_((char *) "EXIT");
+    cout << "EXIT sent." << endl;
+     */
     client->shutdown_(_socket::BOTH);
     client->close_();
     delete client;

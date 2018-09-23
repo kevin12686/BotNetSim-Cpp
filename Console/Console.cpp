@@ -3,7 +3,7 @@
 #include <set>
 #include <sstream>
 #include <algorithm>
-#include <ctime>
+#include <chrono>
 #include "_socketserver.h"
 #include "Timer.h"
 
@@ -47,7 +47,15 @@ DWORD WINAPI virtual_broadcast(LPVOID);
 // Spreading Bot
 DWORD WINAPI bot_spreading(LPVOID);
 
+DWORD WINAPI handle_bot_spreading(LPVOID);
+
+DWORD WINAPI change_sensor(LPVOID);
+
+DWORD WINAPI change_crawler(LPVOID);
+
 vector<string> split(const string &, char);
+
+int delay_choose(void);
 
 int classify_msg(string);
 
@@ -55,11 +63,11 @@ int handle_msg(_socket *, string, HOST *);
 
 int handle_msg(_socket *, string);
 
-int infection(void);
+int infection(bool *);
 
 // Setting
 // Growing rate(minutes-VT)
-int GROWRATE = 30;
+int GROWRATE = 5;
 // Growing Number
 int GROWNUM = 10;
 // Start Growing Threshold
@@ -74,23 +82,25 @@ string msg_token[] = {"Request", "HOST", "CTRL", "EXIT", "R"};
 // Global Variables
 // init
 Timer v_t(100.0);
+chrono::steady_clock::time_point start_time;
 set<HOST *, HOSTPtrComp> host_set;
 set<HOST *, HOSTPtrComp> bot_set;
+set<HOST *, HOSTPtrComp> bot_ndelay_list;
 set<HOST *, HOSTPtrComp> crawler_set;
 set<HOST *, HOSTPtrComp> sensor_set;
 set<HOST *, HOSTPtrComp> controler_set;
 set<HOST *, HOSTPtrComp> getcha_set;
 
-// random
-
 int main() {
     // init
+    start_time = chrono::steady_clock::now();
     v_t.setUpdateRate(TSD);
     MyThread timer;
     MyThread server;
     MyThread time_broadcast;
     MyThread spreading;
-    srand(unsigned(time(NULL)));
+    vector<HANDLE> thread_handle;
+    vector<DWORD> thread_id;
 
     // main
     bool console_on = true;
@@ -162,7 +172,9 @@ int main() {
     printf("list_bot : List Bot\nlist_ctrl : List Controler\n");
     printf("list_crawler : List Crawler\nlist_sensor : List Sensor\n");
     printf("list_getcha : List Getcha\nglobal : Global Status\n");
-    printf("timestamp : Current Timestamp\n");
+    printf("timestamp : Current Timestamp\nset_time_rate : Set Time Rate\n");
+    printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
+    printf("add_crawler : Add Crawler\n");
     string UserCommand = "";
     while (UserCommand != "quit") {
         cin >> UserCommand;
@@ -207,6 +219,32 @@ int main() {
                    getcha_set.size());
         } else if (UserCommand == "timestamp") {
             printf("timestamp: %s\n", v_t.timestamp().c_str());
+        } else if (UserCommand == "set_time_rate") {
+            printf("Time Rate: ");
+            float rate;
+            scanf("%f", &rate);
+            v_t.setRate(rate);
+        } else if (UserCommand == "set_update_rate") {
+            printf("Update Rate: ");
+            scanf("%d", &TSD);
+        } else if (UserCommand == "add_sensor") {
+            int num;
+            HANDLE t;
+            DWORD id;
+            printf("Numbers: ");
+            scanf("%d", &num);
+            t = CreateThread(NULL, 0, change_sensor, new pair<bool *, int>(&console_on, num), 0, &id);
+            thread_handle.push_back(t);
+            thread_id.push_back(id);
+        } else if (UserCommand == "add_crawler") {
+            int num;
+            HANDLE t;
+            DWORD id;
+            printf("Numbers: ");
+            scanf("%d", &num);
+            t = CreateThread(NULL, 0, change_crawler, new pair<bool *, int>(&console_on, num), 0, &id);
+            thread_handle.push_back(t);
+            thread_id.push_back(id);
         }
     }
 
@@ -221,6 +259,10 @@ int main() {
     v_t.stop();
     WaitForSingleObject(timer.handle, INFINITE);
     CloseHandle(timer.handle);
+    WaitForMultipleObjects((DWORD) thread_handle.size(), &thread_handle[0], true, INFINITE);
+    for (auto i : thread_handle) {
+        CloseHandle(i);
+    }
     _socket::wsacleanup_();
 
     set<HOST *, HOSTPtrComp>::iterator it_i;
@@ -254,6 +296,7 @@ int main() {
             delete *it_i;
         }
     }
+    bot_ndelay_list.clear();
 }
 
 DWORD WINAPI virtual_time(LPVOID null) {
@@ -361,7 +404,7 @@ DWORD WINAPI virtual_broadcast(LPVOID console) {
 
 DWORD WINAPI bot_spreading(LPVOID console) {
     printf("[INFO] Bot Spreading Thread Started.\n");
-    srand(unsigned(time(NULL)));
+    srand(unsigned(chrono::duration_cast<chrono::nanoseconds>(start_time - chrono::steady_clock::now()).count()));
     bool *console_on = (bool *) console;
     bool letgo = false;
     int time_pass = 0;
@@ -373,17 +416,169 @@ DWORD WINAPI bot_spreading(LPVOID console) {
                 temp = time_pass / GROWRATE / 60000;
                 time_pass %= GROWRATE * 60000;
                 for (int i = 0; i < temp; i++) {
-                    infection();
+                    infection(console_on);
                 }
             }
         } else if (host_set.size() > GROWT) {
             printf("[INFO] Starting Inflection.\n");
             letgo = true;
-            infection();
+            infection(console_on);
         }
         Sleep(TSD);
     }
     printf("[INFO] Bot Spreading Thread Stop.\n");
+    return 1;
+}
+
+DWORD WINAPI handle_bot_spreading(LPVOID client) {
+    pair<_socket *, HOST *> *p = (pair<_socket *, HOST *> *) client;
+    srand(unsigned(chrono::duration_cast<chrono::nanoseconds>(start_time - chrono::steady_clock::now()).count()));
+    _socket *client_i = p->first;
+    HOST *target_i = p->second;
+    set<HOST *, HOSTPtrComp>::iterator it_i;
+
+    // process
+    bool recv_loop = true;
+    char *msg_ptr = NULL;
+    while (recv_loop) {
+        if ((client_i)->check_recv_(IDLE)) {
+            msg_ptr = (client_i)->recv_();
+            if (msg_ptr) {
+                printf("MSG: %s\n", msg_ptr);
+                int token_id = handle_msg(client_i, msg_ptr, target_i);
+                if (token_id != 0) {
+                    recv_loop = false;
+                    if (token_id != 3) {
+                        printf("[Warning] Bot Unable To Start Up.\n");
+                        host_set.insert(target_i);
+                        bot_set.erase(bot_set.find(target_i));
+                        it_i = bot_ndelay_list.find(target_i);
+                        if (it_i == bot_ndelay_list.end()) {
+                            if (*it_i == target_i) {
+                                bot_set.erase(it_i);
+                            }
+                        } else {
+                            bot_set.erase(it_i);
+                        }
+                    }
+                }
+            } else {
+                recv_loop = false;
+                printf("[Warning] Bot Unable To Start Up.\n");
+                host_set.insert(target_i);
+                bot_set.erase(bot_set.find(target_i));
+                it_i = bot_ndelay_list.find(target_i);
+                if (it_i == bot_ndelay_list.end()) {
+                    if (*it_i == target_i) {
+                        bot_set.erase(it_i);
+                    }
+                } else {
+                    bot_set.erase(it_i);
+                }
+            }
+        } else {
+            recv_loop = false;
+            printf("[Warning] Socket Timeout or Error.\n");
+            printf("[Warning] Bot Unable To Start Up.\n");
+            host_set.insert(target_i);
+            bot_set.erase(bot_set.find(target_i));
+            it_i = bot_ndelay_list.find(target_i);
+            if (it_i == bot_ndelay_list.end()) {
+                if (*it_i == target_i) {
+                    bot_set.erase(it_i);
+                }
+            } else {
+                bot_set.erase(it_i);
+            }
+        }
+    }
+
+    (client_i)->shutdown_(_socket::BOTH);
+    (client_i)->close_();
+    delete client_i;
+    delete p;
+    return 1;
+}
+
+DWORD WINAPI change_sensor(LPVOID console_on) {
+    pair<bool *, int> *p = (pair<bool *, int> *) console_on;
+    bool *console = p->first;
+    int num = p->second;
+    int i, random;
+    set<HOST *, HOSTPtrComp>::iterator host_i;
+    for (i = 0; i < num && *console; i++) {
+        random = rand() % host_set.size();
+        host_i = host_set.begin();
+        advance(host_i, random);
+        HOST *target = *host_i;
+        _socket client((char *) (target->ip).c_str(), (char *) (target->port).c_str(), BUFSIZE);
+        if (client.get_status()) {
+            if (client.send_((char *) "Change:Sensor") == -1) {
+                printf("[Warning] %s:%s Send failed.(Sensor)\n", (target->ip).c_str(),
+                       (target->port).c_str());
+            } else {
+                sensor_set.insert(target);
+                host_set.erase(host_i);
+            }
+        } else {
+            printf("[Warning] %s:%s Connected failed.(Sensor)\n", (target->ip).c_str(), (target->port).c_str());
+        }
+        client.shutdown_(_socket::BOTH);
+        client.close_();
+    }
+    delete p;
+    return 1;
+}
+
+DWORD WINAPI change_crawler(LPVOID console_on) {
+    pair<bool *, int> *p = (pair<bool *, int> *) console_on;
+    bool *console = p->first;
+    int num = p->second;
+    int i, random;
+    set<HOST *, HOSTPtrComp>::iterator host_i;
+    for (i = 0; i < num && *console; i++) {
+        random = rand() % host_set.size();
+        host_i = host_set.begin();
+        advance(host_i, random);
+        HOST *target = *host_i;
+        _socket client((char *) (target->ip).c_str(), (char *) (target->port).c_str(), BUFSIZE);
+        if (client.get_status()) {
+            if (client.send_((char *) "Change:Crawler") == -1) {
+                printf("[Warning] %s:%s Send failed.(Crawler)\n", (target->ip).c_str(),
+                       (target->port).c_str());
+            } else {
+                // process
+                bool recv_loop = true;
+                char *msg_ptr = NULL;
+                while (recv_loop && *console) {
+                    if (client.check_recv_(IDLE)) {
+                        msg_ptr = client.recv_();
+                        if (msg_ptr) {
+                            printf("MSG: %s\n", msg_ptr);
+                            int token_id = handle_msg(&client, msg_ptr, target);
+                            if (token_id == 3) {
+                                recv_loop = false;
+                                crawler_set.insert(target);
+                                host_set.erase(host_i);
+                            }
+                        } else {
+                            recv_loop = false;
+                            printf("[Warning] Crawler Unable To Start Up.\n");
+                        }
+                    } else {
+                        recv_loop = false;
+                        printf("[Warning] Socket Timeout or Error.\n");
+                        printf("[Warning] Crawler Unable To Start Up.\n");
+                    }
+                }
+            }
+        } else {
+            printf("[Warning] %s:%s Connected failed.(Crawler)\n", (target->ip).c_str(), (target->port).c_str());
+        }
+        client.shutdown_(_socket::BOTH);
+        client.close_();
+    }
+    delete p;
     return 1;
 }
 
@@ -395,6 +590,12 @@ vector<string> split(const string &str, char delimiter) {
         tokens.push_back(token);
     }
     return tokens;
+}
+
+// Random Delay Bot
+int delay_choose() {
+    int random = rand() % 100;
+    return random < 50 ? 0 : 1;
 }
 
 // Classify The Message Type
@@ -516,8 +717,8 @@ int handle_msg(_socket *client, string msg_data) {
     return handle_msg(client, msg_data, this_host);
 }
 
-int infection(void) {
-    int random_num;
+int infection(bool *console) {
+    int random_num, delay;
     set<HOST *, HOSTPtrComp>::iterator host_i;
     vector<HOST *> target_list;
     vector<_socket *> client_list;
@@ -525,20 +726,23 @@ int infection(void) {
     string recv_data;
     if (host_set.size() > GROWT && host_set.size() > GROWNUM) {
         printf("[INFO] Infecting...\n");
-        for (int i = 0; i < GROWNUM;) {
+        for (int i = 0; i < GROWNUM && *console;) {
             random_num = rand() % host_set.size();
             host_i = host_set.begin();
             advance(host_i, random_num);
             target = *host_i;
             _socket *client = new _socket((char *) ((target->ip).c_str()), (char *) ((target->port).c_str()), BUFSIZE);
             if (client->get_status()) {
-                if (client->send_((char *) "Change:Bot") == -1) {
+                delay = delay_choose();
+                if (client->send_((char *) ("Change:Bot:" + to_string(delay)).c_str()) == -1) {
                     printf("[Warning] HOST %s:%s Change Bot Failed.\n", (target->ip).c_str(), (target->port).c_str());
                     delete client;
                 } else {
                     client_list.push_back(client);
                     target_list.push_back(target);
                     bot_set.insert(target);
+                    if (delay == 0)
+                        bot_ndelay_list.insert(target);
                     host_set.erase(host_i);
                     i++;
                 }
@@ -549,46 +753,22 @@ int infection(void) {
 
         vector<HOST *>::iterator target_i;
         vector<_socket *>::iterator client_i;
+        vector<HANDLE> handle;
+        vector<DWORD> tid;
 
         for (target_i = target_list.begin(), client_i = client_list.begin();
              target_i != target_list.end() && client_i != client_list.end();
              target_list.erase(target_i), client_list.erase(client_i)) {
-
-            // process
-            bool recv_loop = true;
-            char *msg_ptr = NULL;
-            while (recv_loop) {
-                if ((*client_i)->check_recv_(IDLE)) {
-                    msg_ptr = (*client_i)->recv_();
-                    if (msg_ptr) {
-                        printf("MSG: %s\n", msg_ptr);
-                        int token_id = handle_msg(*client_i, msg_ptr, *target_i);
-                        if (token_id != 0) {
-                            recv_loop = false;
-                            if (token_id != 3) {
-                                printf("[Warning] Bot Unable To Start Up.\n");
-                                host_set.insert(*target_i);
-                                bot_set.erase(bot_set.find(*target_i));
-                            }
-                        }
-                    } else {
-                        recv_loop = false;
-                        printf("[Warning] Bot Unable To Start Up.\n");
-                        host_set.insert(*target_i);
-                        bot_set.erase(bot_set.find(*target_i));
-                    }
-                } else {
-                    recv_loop = false;
-                    printf("[Warning] Socket Timeout or Error.\n");
-                    printf("[Warning] Bot Unable To Start Up.\n");
-                    host_set.insert(*target_i);
-                    bot_set.erase(bot_set.find(*target_i));
-                }
-            }
-
-            (*client_i)->shutdown_(_socket::BOTH);
-            (*client_i)->close_();
-            delete *client_i;
+            DWORD temp;
+            HANDLE t = CreateThread(NULL, 0, handle_bot_spreading,
+                                    (LPVOID) new pair<_socket *, HOST *>(*client_i, *target_i), 0, &temp);
+            handle.push_back(t);
+            tid.push_back(temp);
+            Sleep(100);
+        }
+        WaitForMultipleObjects((DWORD) handle.size(), &handle[0], true, INFINITE);
+        for (auto i : handle) {
+            CloseHandle(i);
         }
     }
     return 1;
