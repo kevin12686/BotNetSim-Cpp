@@ -83,6 +83,7 @@ string msg_token[] = {"Request", "HOST", "CTRL", "EXIT", "R"};
 // init
 Timer v_t(100.0);
 chrono::steady_clock::time_point start_time;
+HANDLE action_lock, data_lock;
 set<HOST *, HOSTPtrComp> host_set;
 set<HOST *, HOSTPtrComp> bot_set;
 set<HOST *, HOSTPtrComp> bot_ndelay_list;
@@ -101,6 +102,17 @@ int main() {
     MyThread spreading;
     vector<HANDLE> thread_handle;
     vector<DWORD> thread_id;
+    action_lock = CreateMutex(NULL, false, NULL);
+    if (action_lock == NULL) {
+        printf("[ERROR] CreateMutex Error. ErrorCode=%d", GetLastError());
+        return 1;
+    }
+    data_lock = CreateMutex(NULL, false, NULL);
+    if (data_lock == NULL) {
+        printf("[ERROR] CreateMutex Error. ErrorCode=%d", GetLastError());
+        CloseHandle(action_lock);
+        return 1;
+    }
 
     // main
     bool console_on = true;
@@ -110,6 +122,8 @@ int main() {
     if (!timer.handle) {
         printf("[Error] Timer Thread Unable To Start.\n");
         console_on = false;
+        CloseHandle(action_lock);
+        CloseHandle(data_lock);
         return 1;
     }
 
@@ -121,6 +135,8 @@ int main() {
         v_t.stop();
         WaitForSingleObject(timer.handle, INFINITE);
         CloseHandle(timer.handle);
+        CloseHandle(action_lock);
+        CloseHandle(data_lock);
         return 1;
     }
     server.handle = CreateThread(NULL, 0, server_accept, (LPVOID) &console_on, 0, &(server.id));
@@ -131,6 +147,8 @@ int main() {
         v_t.stop();
         WaitForSingleObject(timer.handle, INFINITE);
         CloseHandle(timer.handle);
+        CloseHandle(action_lock);
+        CloseHandle(data_lock);
         return 1;
     }
 
@@ -144,6 +162,8 @@ int main() {
         v_t.stop();
         WaitForSingleObject(timer.handle, INFINITE);
         CloseHandle(timer.handle);
+        CloseHandle(action_lock);
+        CloseHandle(data_lock);
         return 1;
     }
 
@@ -159,6 +179,8 @@ int main() {
         v_t.stop();
         WaitForSingleObject(timer.handle, INFINITE);
         CloseHandle(timer.handle);
+        CloseHandle(action_lock);
+        CloseHandle(data_lock);
         return 1;
     }
 
@@ -233,18 +255,26 @@ int main() {
             DWORD id;
             printf("Numbers: ");
             scanf("%d", &num);
-            t = CreateThread(NULL, 0, change_sensor, new pair<bool *, int>(&console_on, num), 0, &id);
-            thread_handle.push_back(t);
-            thread_id.push_back(id);
+            if (num > host_set.size()) {
+                printf("[Warning] Number is bigger than host.\n");
+            } else {
+                t = CreateThread(NULL, 0, change_sensor, new pair<bool *, int>(&console_on, num), 0, &id);
+                thread_handle.push_back(t);
+                thread_id.push_back(id);
+            }
         } else if (UserCommand == "add_crawler") {
             int num;
             HANDLE t;
             DWORD id;
             printf("Numbers: ");
             scanf("%d", &num);
-            t = CreateThread(NULL, 0, change_crawler, new pair<bool *, int>(&console_on, num), 0, &id);
-            thread_handle.push_back(t);
-            thread_id.push_back(id);
+            if (num > host_set.size()) {
+                printf("[Warning] Number is bigger than host.\n");
+            } else {
+                t = CreateThread(NULL, 0, change_crawler, new pair<bool *, int>(&console_on, num), 0, &id);
+                thread_handle.push_back(t);
+                thread_id.push_back(id);
+            }
         }
     }
 
@@ -260,6 +290,8 @@ int main() {
     WaitForSingleObject(timer.handle, INFINITE);
     CloseHandle(timer.handle);
     WaitForMultipleObjects((DWORD) thread_handle.size(), &thread_handle[0], true, INFINITE);
+    CloseHandle(action_lock);
+    CloseHandle(data_lock);
     for (auto i : thread_handle) {
         CloseHandle(i);
     }
@@ -416,13 +448,23 @@ DWORD WINAPI bot_spreading(LPVOID console) {
                 temp = time_pass / GROWRATE / 60000;
                 time_pass %= GROWRATE * 60000;
                 for (int i = 0; i < temp; i++) {
+                    printf("[INFO] Spreading Wait Lock.\n");
+                    WaitForSingleObject(action_lock, INFINITE);
+                    printf("[INFO] Spreading Get Lock.\n");
                     infection(console_on);
+                    ReleaseMutex(action_lock);
+                    printf("[INFO] Spreading Release Lock.\n");
                 }
             }
         } else if (host_set.size() > GROWT) {
             printf("[INFO] Starting Inflection.\n");
             letgo = true;
+            printf("[INFO] Spreading Wait Lock.\n");
+            WaitForSingleObject(action_lock, INFINITE);
+            printf("[INFO] Spreading Get Lock.\n");
             infection(console_on);
+            ReleaseMutex(action_lock);
+            printf("[INFO] Spreading Release Lock.\n");
         }
         Sleep(TSD);
     }
@@ -450,6 +492,7 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
                     recv_loop = false;
                     if (token_id != 3) {
                         printf("[Warning] Bot Unable To Start Up.\n");
+                        WaitForSingleObject(data_lock, INFINITE);
                         host_set.insert(target_i);
                         bot_set.erase(bot_set.find(target_i));
                         it_i = bot_ndelay_list.find(target_i);
@@ -460,11 +503,13 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
                         } else {
                             bot_set.erase(it_i);
                         }
+                        ReleaseMutex(data_lock);
                     }
                 }
             } else {
                 recv_loop = false;
                 printf("[Warning] Bot Unable To Start Up.\n");
+                WaitForSingleObject(data_lock, INFINITE);
                 host_set.insert(target_i);
                 bot_set.erase(bot_set.find(target_i));
                 it_i = bot_ndelay_list.find(target_i);
@@ -475,11 +520,13 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
                 } else {
                     bot_set.erase(it_i);
                 }
+                ReleaseMutex(data_lock);
             }
         } else {
             recv_loop = false;
             printf("[Warning] Socket Timeout or Error.\n");
             printf("[Warning] Bot Unable To Start Up.\n");
+            WaitForSingleObject(data_lock, INFINITE);
             host_set.insert(target_i);
             bot_set.erase(bot_set.find(target_i));
             it_i = bot_ndelay_list.find(target_i);
@@ -490,6 +537,7 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
             } else {
                 bot_set.erase(it_i);
             }
+            ReleaseMutex(data_lock);
         }
     }
 
@@ -501,6 +549,9 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
 }
 
 DWORD WINAPI change_sensor(LPVOID console_on) {
+    printf("[INFO] Change Sensor Wait Lock.\n");
+    WaitForSingleObject(action_lock, INFINITE);
+    printf("[INFO] Change Sensor Get Lock.\n");
     pair<bool *, int> *p = (pair<bool *, int> *) console_on;
     bool *console = p->first;
     int num = p->second;
@@ -517,8 +568,10 @@ DWORD WINAPI change_sensor(LPVOID console_on) {
                 printf("[Warning] %s:%s Send failed.(Sensor)\n", (target->ip).c_str(),
                        (target->port).c_str());
             } else {
+                WaitForSingleObject(data_lock, INFINITE);
                 sensor_set.insert(target);
                 host_set.erase(host_i);
+                ReleaseMutex(data_lock);
             }
         } else {
             printf("[Warning] %s:%s Connected failed.(Sensor)\n", (target->ip).c_str(), (target->port).c_str());
@@ -526,11 +579,16 @@ DWORD WINAPI change_sensor(LPVOID console_on) {
         client.shutdown_(_socket::BOTH);
         client.close_();
     }
+    ReleaseMutex(action_lock);
+    printf("[INFO] Change Sensor Release Lock.\n");
     delete p;
     return 1;
 }
 
 DWORD WINAPI change_crawler(LPVOID console_on) {
+    printf("[INFO] Change Crawler Wait Lock.\n");
+    WaitForSingleObject(action_lock, INFINITE);
+    printf("[INFO] Change Crawler Get Lock.\n");
     pair<bool *, int> *p = (pair<bool *, int> *) console_on;
     bool *console = p->first;
     int num = p->second;
@@ -558,8 +616,10 @@ DWORD WINAPI change_crawler(LPVOID console_on) {
                             int token_id = handle_msg(&client, msg_ptr, target);
                             if (token_id == 3) {
                                 recv_loop = false;
+                                WaitForSingleObject(data_lock, INFINITE);
                                 crawler_set.insert(target);
                                 host_set.erase(host_i);
+                                ReleaseMutex(data_lock);
                             }
                         } else {
                             recv_loop = false;
@@ -578,6 +638,8 @@ DWORD WINAPI change_crawler(LPVOID console_on) {
         client.shutdown_(_socket::BOTH);
         client.close_();
     }
+    ReleaseMutex(action_lock);
+    printf("[INFO] Change Crawler Release Lock.\n");
     delete p;
     return 1;
 }
@@ -740,10 +802,12 @@ int infection(bool *console) {
                 } else {
                     client_list.push_back(client);
                     target_list.push_back(target);
+                    WaitForSingleObject(data_lock, INFINITE);
                     bot_set.insert(target);
                     if (delay == 0)
                         bot_ndelay_list.insert(target);
                     host_set.erase(host_i);
+                    ReleaseMutex(data_lock);
                     i++;
                 }
             } else {
