@@ -444,7 +444,7 @@ DWORD WINAPI bot_spreading(LPVOID console) {
     while (*console_on) {
         if (letgo) {
             time_pass += (int) (TSD * v_t.getRate());
-            if (time_pass >= GROWRATE * 60000) {
+            if (time_pass >= GROWRATE * 60000 && host_set.size() > GROWT && host_set.size() > GROWNUM) {
                 temp = time_pass / GROWRATE / 60000;
                 time_pass %= GROWRATE * 60000;
                 for (int i = 0; i < temp; i++) {
@@ -614,6 +614,7 @@ DWORD WINAPI change_crawler(LPVOID console_on) {
                         if (msg_ptr) {
                             printf("MSG: %s\n", msg_ptr);
                             int token_id = handle_msg(&client, msg_ptr, target);
+                            printf("Debug_point");
                             if (token_id == 3) {
                                 recv_loop = false;
                                 WaitForSingleObject(data_lock, INFINITE);
@@ -689,7 +690,10 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     set<HOST *, HOSTPtrComp> random_list;
                     if (this_host && msg_data == "Peerlist") {
                         set<HOST *, HOSTPtrComp> my_list(bot_set.begin(), bot_set.end());
-                        my_list.erase(my_list.find(this_host));
+                        set<HOST *, HOSTPtrComp>::iterator it_find = my_list.find(this_host);
+                        if(it_find != my_list.end() && it_find != my_list.end()){
+                            my_list.erase(my_list.find(this_host));
+                        }
                         set<HOST *, HOSTPtrComp>::iterator bot_i;
                         output = "Peerlist";
                         while (random_list.size() < PLSIZE) {
