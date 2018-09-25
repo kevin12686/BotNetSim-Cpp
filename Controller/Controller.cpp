@@ -162,12 +162,12 @@ void socketAccept() {
             if (CONTROL_DEBUG) {
                 cout << "Somebody connected." << endl;
             }
-            cout << "Wait Lock." << endl;
+            //cout << "Wait Lock." << endl;
             WaitForSingleObject(QMutex, INFINITE);
-            cout << "Get Lock." << endl;
+            //cout << "Get Lock." << endl;
             clientSocket.push(listenSocket->accept_());
             ReleaseMutex(QMutex);
-            cout << "Release Lock." << endl;
+            //cout << "Release Lock." << endl;
             t = new _thread((int (*)()) messageHandle);
             t->start();
             ClientT.push_back(t);

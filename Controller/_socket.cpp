@@ -81,7 +81,7 @@ int _socket::send_(char *data) {
     }
     int iResult = send(this->ConnectSocket, data, data_len, 0);
     if (iResult == SOCKET_ERROR) {
-        printf("[%s:%s]Send failed with error: %d\n", this->IP_Address, this->Port, WSAGetLastError());
+        // printf("[%s:%s]Send failed with error: %d\n", this->IP_Address, this->Port, WSAGetLastError());
         this->close_();
         return -1;
     }
@@ -109,7 +109,7 @@ bool _socket::shutdown_(short option) {
             break;
     }
     if (iResult == SOCKET_ERROR) {
-        printf("[%s:%s]Shutdown failed with error: %d\n", this->IP_Address, this->Port, WSAGetLastError());
+        // printf("[%s:%s]Shutdown failed with error: %d\n", this->IP_Address, this->Port, WSAGetLastError());
         this->close_();
         return false;
     }
@@ -137,7 +137,7 @@ int _socket::init_() {
 
     iResult = getaddrinfo(this->IP_Address, this->Port, &(this->hints), &result);
     if (iResult != 0) {
-        printf("[%s:%s]Getaddrinfo failed with error: %d\n", this->IP_Address, this->Port, iResult);
+        // printf("[%s:%s]Getaddrinfo failed with error: %d\n", this->IP_Address, this->Port, iResult);
         this->clean_();
         return 0;
     }
@@ -147,7 +147,7 @@ int _socket::init_() {
         // Create a SOCKET for connecting to server
         this->ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
         if (this->ConnectSocket == INVALID_SOCKET) {
-            printf("[%s:%s]Socket failed with error: %ld\n", this->IP_Address, this->Port, WSAGetLastError());
+            // printf("[%s:%s]Socket failed with error: %ld\n", this->IP_Address, this->Port, WSAGetLastError());
             this->clean_();
             return 0;
         }
@@ -165,7 +165,7 @@ int _socket::init_() {
     freeaddrinfo(result);
 
     if (this->ConnectSocket == INVALID_SOCKET) {
-        printf("Unable to connect to server!\n");
+        // printf("Unable to connect to server!\n");
         this->clean_();
         return 0;
     }
