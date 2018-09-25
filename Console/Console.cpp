@@ -75,13 +75,13 @@ int GROWT = 15;
 // Initial PeerList Size
 int PLSIZE = 3;
 // Time Spreading Delay(mini seconds-RT)
-short TSD = 200;
+short TSD = 240;
 // MsgType Define
 string msg_token[] = {"Request", "HOST", "CTRL", "EXIT", "R"};
 
 // Global Variables
 // init
-Timer v_t(100.0);
+Timer v_t(1000.0);
 chrono::steady_clock::time_point start_time;
 HANDLE action_lock, data_lock;
 set<HOST *, HOSTPtrComp> host_set;
@@ -711,8 +711,8 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     } else if (msg_data == "Sensorlist") {
                         set<HOST *, HOSTPtrComp>::iterator sensor_i;
                         output = "Sensorlist";
-                        while (random_list.size() < sensor_set.size() > SensorPerMsg ? SensorPerMsg
-                                                                                     : sensor_set.size()) {
+                        while (random_list.size() < (sensor_set.size() > SensorPerMsg ? SensorPerMsg
+                                                                                      : sensor_set.size())) {
                             random_num = rand() % sensor_set.size();
                             sensor_i = sensor_set.begin();
                             advance(sensor_i, random_num);
@@ -737,7 +737,9 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 create = new HOST;
                 create->ip = arr.at(0);
                 create->port = arr.at(1);
+                WaitForSingleObject(data_lock, INFINITE);
                 host_set.insert(create);
+                ReleaseMutex(data_lock);
                 if (client->send_((char *) "OK") == -1) {
                     printf("[Warning] Host %s:%s Register Failed.\n", (create->ip).c_str(), (create->port).c_str());
                 }
@@ -749,7 +751,9 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 create = new HOST;
                 create->ip = arr.at(0);
                 create->port = arr.at(1);
+                WaitForSingleObject(data_lock, INFINITE);
                 controler_set.insert(create);
+                ReleaseMutex(data_lock);
                 break;
 
                 // EXIT
