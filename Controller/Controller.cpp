@@ -108,6 +108,7 @@ int main(int argc, char *argv[]) {
     Sleep(1000);
 
     cout << "[INFO] Controller Start!" << endl;
+    cout << "[INSTRUCTION] Input \'L\' To ALL." << endl;
     cout << "[INSTRUCTION] Input \'H\' To Show Hosts." << endl;
     cout << "[INSTRUCTION] Input \'S\' To Show Suspects." << endl;
     cout << "[INSTRUCTION] Input \'E\' To Exit." << endl;
@@ -119,15 +120,17 @@ int main(int argc, char *argv[]) {
         cout << ">";
         cin >> operation;
         switch (operation) {
-            case 'H':
+            case 'L':
                 cout << "Host Number: " << host.size() << endl;
+                cout << "Suspect Number: " << suspect.size() << endl;
+                break;
+            case 'H':
                 for (each = host.begin(); each != host.end(); each++) {
                     cout << "HOST => " << LOCAL_IP_ADDRESS << ":" << *each << " [DISCONNECT:" << disconnect[*each]
                          << "]" << endl;
                 }
                 break;
             case 'S':
-                cout << "Suspect Number: " << suspect.size() << endl;
                 for (each = suspect.begin(); each != suspect.end(); each++) {
                     cout << "SUSPECT > " << *each << endl;
                 }
@@ -223,11 +226,16 @@ void messageHandle() {
         // host Register
         char *host_port = (char *) calloc(6, sizeof(char));
         memcpy(host_port, &message[1], strlen(message) - 1);
+        host.push_back(host_port);
+        disconnect[host_port] = 0;
+        clientS->send_((char *) "OK");
+        /*
         if ( host.empty() || host.end() != find(host.begin(), host.end(), host_port)) {
             host.push_back(host_port);
             disconnect[host_port] = 0;
             clientS->send_((char *) "OK");
         }
+        */
 
     } else {
         cout << "[Message] receive other type of message" << endl;
