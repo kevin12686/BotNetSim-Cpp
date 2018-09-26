@@ -1,7 +1,6 @@
 #include <iostream>
 #include <queue>
 #include <string>
-#include "_thread.h"
 #include <sstream>
 #include <iomanip>
 #include <map>
@@ -15,9 +14,14 @@
 
 using namespace std;
 
+typedef struct MYTHREAD {
+    HANDLE handle;
+    DWORD id;
+} MyThread;
+
 void socketAccept();
 
-void messageHandle();
+void messageHandle(LPVOID);
 
 void report();
 
@@ -30,9 +34,6 @@ HANDLE QMutex;
 
 // Collect parameters for client_thread
 queue<_socket *> clientSocket;
-
-// Collect _thread
-vector<_thread *> ClientT;
 
 vector<char *> suspect;
 vector<char *> host;
@@ -53,6 +54,10 @@ int main(int argc, char *argv[]) {
         cout << "Please input three parameters \'console ip\', \'local ip\', \'timezone\'." << endl;
         return 0;
     }
+
+    MyThread accept_t;
+    MyThread report_t;
+    MyThread revive_t;
 
     size_t console_ip_length = strlen(argv[1]) + 1;
     CONSOLE_IP_ADDRESS = new char[console_ip_length]{0};
@@ -92,15 +97,13 @@ int main(int argc, char *argv[]) {
     listenSocket = new _socketserver((char *) "1999", 1024);
 
     // 收訊息Thread
-    _thread accept_t((int (*)()) socketAccept);
-    accept_t.start();
+    accept_t.handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) socketAccept, NULL, 0, &(accept_t.id));
 
     // 回報Thread
-    _thread report_t((int (*)()) report);
-    report_t.start();
+    report_t.handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) report, NULL, 0, &(report_t.id));
 
-    _thread revive_t((int (*)()) revive);
-    revive_t.start();
+    // 重生Thread
+    revive_t.handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) revive, NULL, 0, &(revive_t.id));
 
     Sleep(1000);
 
@@ -135,14 +138,22 @@ int main(int argc, char *argv[]) {
             case 'E':
                 cout << "Controller Shutdown!" << endl;
                 server_status = false;
-                accept_t.join();
-                report_t.join();
                 FLAG = false;
                 break;
             default:
                 cout << "Invalid Instruction!" << endl;
         }
+
     } while (FLAG);
+
+    WaitForSingleObject(accept_t.handle, INFINITE);
+    CloseHandle(accept_t.handle);
+
+    WaitForSingleObject(report_t.handle, INFINITE);
+    CloseHandle(report_t.handle);
+
+    WaitForSingleObject(revive_t.handle, INFINITE);
+    CloseHandle(revive_t.handle);
 
     // 清理垃圾
     delete listenSocket;
@@ -153,38 +164,40 @@ int main(int argc, char *argv[]) {
 
 
 void socketAccept() {
-    bool flag;
     cout << "Accepting..." << endl;
-    _thread *t = NULL;
+    vector<MyThread *> clientT;
     while (server_status) {
-        flag = listenSocket->check_connect_(1000);
-        if (flag) {
+        if (listenSocket->check_connect_(500)) {
             if (CONTROL_DEBUG) {
                 cout << "Somebody connected." << endl;
             }
-            //cout << "Wait Lock." << endl;
-            WaitForSingleObject(QMutex, INFINITE);
-            //cout << "Get Lock." << endl;
-            clientSocket.push(listenSocket->accept_());
-            ReleaseMutex(QMutex);
-            //cout << "Release Lock." << endl;
-            t = new _thread((int (*)()) messageHandle);
-            t->start();
-            ClientT.push_back(t);
+
+            _socket *client = listenSocket->accept_();
+
+            MyThread *temp = new MyThread;
+            temp->handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) messageHandle, (LPVOID) client, 0,
+                                        &(temp->id));
+            if (temp->handle) {
+                if (CONTROL_DEBUG) {
+                    printf("[INFO] Client Accepted.\n");
+                }
+                clientT.push_back(temp);
+            }
         }
     }
-    vector<_thread *>::iterator it_i;
-    for (it_i = ClientT.begin(); it_i != ClientT.end(); it_i++) {
-        (*it_i)->join();
+    vector<MyThread *>::iterator it_i;
+    for (it_i = clientT.begin(); it_i != clientT.end(); it_i++) {
+        WaitForSingleObject((*it_i)->handle, INFINITE);
+        CloseHandle((*it_i)->handle);
         delete (*it_i);
     }
     cout << "Stop accepting..." << endl;
 }
 
 
-void messageHandle() {
+void messageHandle(LPVOID s) {
     WaitForSingleObject(QMutex, INFINITE);
-    _socket *clientS = clientSocket.front();
+    _socket *clientS = (_socket *) s;
     clientSocket.pop();
     ReleaseMutex(QMutex);
 
