@@ -836,7 +836,7 @@ int infection(bool *console) {
                                     (LPVOID) new pair<_socket *, HOST *>(*client_i, *target_i), 0, &temp);
             handle.push_back(t);
             tid.push_back(temp);
-            Sleep(100);
+            Sleep(10);
         }
         WaitForMultipleObjects((DWORD) handle.size(), &handle[0], true, INFINITE);
         for (auto i : handle) {
