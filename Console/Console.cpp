@@ -81,7 +81,7 @@ string msg_token[] = {"Request", "HOST", "CTRL", "EXIT", "R"};
 
 // Global Variables
 // init
-Timer v_t(1000.0);
+Timer v_t(100.0);
 chrono::steady_clock::time_point start_time;
 HANDLE action_lock, data_lock;
 set<HOST *, HOSTPtrComp> host_set;
@@ -614,7 +614,6 @@ DWORD WINAPI change_crawler(LPVOID console_on) {
                         if (msg_ptr) {
                             printf("MSG: %s\n", msg_ptr);
                             int token_id = handle_msg(&client, msg_ptr, target);
-                            printf("Debug_point");
                             if (token_id == 3) {
                                 recv_loop = false;
                                 WaitForSingleObject(data_lock, INFINITE);
