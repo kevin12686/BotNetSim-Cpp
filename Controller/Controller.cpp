@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <map>
 #include <algorithm>
+#include <tchar.h>
 #include "_socket.h"
 #include "_socketserver.h"
 
@@ -25,20 +26,12 @@ void messageHandle(LPVOID);
 
 void report();
 
-void revive();
+// void revive();
 
 std::ostringstream calculate_time(char *);
 
-// Lock
-HANDLE QMutex;
-
-// Collect parameters for client_thread
-queue<_socket *> clientSocket;
-
 vector<char *> suspect;
 vector<char *> host;
-map<char *, short> disconnect;
-
 _socketserver *listenSocket;
 
 bool server_status = false;
@@ -46,6 +39,10 @@ bool server_status = false;
 char *CONSOLE_IP_ADDRESS;
 char *LOCAL_IP_ADDRESS;
 int LOCAL_TIMEZONE;
+
+HANDLE datetimeFileMap;
+BOOL bResult;
+PCHAR lpBuffer = nullptr;
 
 bool CONTROL_DEBUG = false;
 
@@ -57,7 +54,7 @@ int main(int argc, char *argv[]) {
 
     MyThread accept_t;
     MyThread report_t;
-    MyThread revive_t;
+    // MyThread revive_t;
 
     size_t console_ip_length = strlen(argv[1]) + 1;
     CONSOLE_IP_ADDRESS = new char[console_ip_length]{0};
@@ -69,10 +66,20 @@ int main(int argc, char *argv[]) {
 
     LOCAL_TIMEZONE = std::atoi(argv[3]);
 
-    QMutex = CreateMutex(nullptr, false, nullptr);
-    if (QMutex == nullptr) {
-        cout << "CreateMutex Error. ErrorCode=" << GetLastError() << endl;
-        return 1;
+    datetimeFileMap = CreateFileMapping(
+            INVALID_HANDLE_VALUE,
+            nullptr,
+            PAGE_READWRITE,
+            0,
+            256,
+            _T("BotNetShareDateTime"));
+
+    if (!datetimeFileMap) {
+        printf("[DateTime] CreateFileMapping Failed Error: %d.\n", GetLastError());
+        return 0;
+    } else {
+        if(CONTROL_DEBUG)
+            printf("[DateTime] CreateFileMapping Success!\n");
     }
 
 
@@ -89,7 +96,8 @@ int main(int argc, char *argv[]) {
     strcat(msg, (const char *) ":");
     strcat(msg, std::to_string(LOCAL_PORT).c_str());
     if (socket2Console.send_(msg) == -1) {
-        cout << "Send Message To Console Failed" << endl;
+        cout << "[Socket] Send Message To Console Failed" << endl;
+        return 0;
     }
     socket2Console.close_();
 
@@ -103,11 +111,11 @@ int main(int argc, char *argv[]) {
     report_t.handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) report, NULL, 0, &(report_t.id));
 
     // 重生Thread
-    revive_t.handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) revive, NULL, 0, &(revive_t.id));
+    //revive_t.handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) revive, NULL, 0, &(revive_t.id));
 
     Sleep(1000);
 
-    cout << "[INFO] Controller Start!" << endl;
+    cout << "[Application] Controller Start!" << endl;
     cout << "[INSTRUCTION] Input \'L\' To Show All." << endl;
     cout << "[INSTRUCTION] Input \'H\' To Show Hosts." << endl;
     cout << "[INSTRUCTION] Input \'S\' To Show Suspects." << endl;
@@ -117,7 +125,6 @@ int main(int argc, char *argv[]) {
     bool FLAG = true;
     vector<char *>::iterator each;
     do {
-        cout << ">";
         cin >> operation;
         switch (operation) {
             case 'L':
@@ -126,8 +133,7 @@ int main(int argc, char *argv[]) {
                 break;
             case 'H':
                 for (each = host.begin(); each != host.end(); each++) {
-                    cout << "HOST => " << LOCAL_IP_ADDRESS << ":" << *each << " [DISCONNECT:" << disconnect[*each]
-                         << "]" << endl;
+                    cout << "HOST => " << LOCAL_IP_ADDRESS << ":" << *each << endl;
                 }
                 break;
             case 'S':
@@ -136,12 +142,12 @@ int main(int argc, char *argv[]) {
                 }
                 break;
             case 'E':
-                cout << "Controller Shutdown!" << endl;
+                cout << "[Application] Controller Shutdown!" << endl;
                 server_status = false;
                 FLAG = false;
                 break;
             default:
-                cout << "Invalid Instruction!" << endl;
+                cout << "[Application] Invalid Instruction!" << endl;
         }
 
     } while (FLAG);
@@ -152,24 +158,37 @@ int main(int argc, char *argv[]) {
     WaitForSingleObject(report_t.handle, INFINITE);
     CloseHandle(report_t.handle);
 
+    /*
     WaitForSingleObject(revive_t.handle, INFINITE);
     CloseHandle(revive_t.handle);
+    */
+
+    bResult = UnmapViewOfFile(lpBuffer);
+    if (!bResult) {
+        printf("[DateTime] UnmapViewOfFile Failed Error: %d.\n", GetLastError());
+        exit(-1);
+    }
+    else {
+        if(CONTROL_DEBUG)
+            printf("[DateTime] UnmapViewOfFile Success!\n");
+    }
 
     // 清理垃圾
     delete listenSocket;
 
-    CloseHandle(QMutex);
     return 0;
 }
 
 
 void socketAccept() {
-    cout << "Accepting..." << endl;
+
+    printf("[Application] Accepting...\n");
+
     vector<MyThread *> clientT;
     while (server_status) {
         if (listenSocket->check_connect_(500)) {
             if (CONTROL_DEBUG) {
-                cout << "Somebody connected." << endl;
+                cout << "[Socket] Somebody connected." << endl;
             }
 
             _socket *client = listenSocket->accept_();
@@ -179,7 +198,7 @@ void socketAccept() {
                                         &(temp->id));
             if (temp->handle) {
                 if (CONTROL_DEBUG) {
-                    printf("[INFO] Client Accepted.\n");
+                    printf("[Thread] Client Accepted.\n");
                 }
                 clientT.push_back(temp);
             }
@@ -191,20 +210,18 @@ void socketAccept() {
         CloseHandle((*it_i)->handle);
         delete (*it_i);
     }
-    cout << "Stop accepting..." << endl;
+    printf("[Application] Stop accepting...\n");
 }
 
 
 void messageHandle(LPVOID s) {
-    WaitForSingleObject(QMutex, INFINITE);
     _socket *clientS = (_socket *) s;
-    clientSocket.pop();
-    ReleaseMutex(QMutex);
 
     char *message = clientS->recv_();
-    if (CONTROL_DEBUG) {
-        cout << "From " << clientS->getIPAddr() << " : " << message << endl;
-    }
+
+    if (CONTROL_DEBUG)
+        cout << "[Message] From " << clientS->getIPAddr() << " : " << message << endl;
+
     char msg_type = message[0];
     // 判斷收到訊息 s 類型
     // T for time, R for Report, S for Sign up
@@ -214,6 +231,20 @@ void messageHandle(LPVOID s) {
         char *datetime = new char[17]{0};
         strncpy(datetime, &message[1], 14);
         strncpy(datetime, (char *) calculate_time(datetime).str().c_str(), 16);
+
+        lpBuffer = (PCHAR) MapViewOfFile(datetimeFileMap, FILE_MAP_ALL_ACCESS, 0, 0, 256);
+
+        if (lpBuffer == nullptr) {
+            if (CONTROL_DEBUG)
+                printf("[DateTime] MapViewOfFile Failed Error: %d.\n", GetLastError());
+
+        } else {
+            if (CONTROL_DEBUG)
+                printf("[DateTime] MapViewOfFile Success!\n");
+
+            CopyMemory(lpBuffer, datetime, 16);
+        }
+        /*
         for (short i = 0; i < host.size(); i++) {
             if (disconnect[host[i]] < 10) {
                 _socket sConnect(LOCAL_IP_ADDRESS, host[i], 1024);
@@ -223,7 +254,7 @@ void messageHandle(LPVOID s) {
                 sConnect.close_();
             }
         }
-
+        */
         delete[] datetime;
 
     } else if (msg_type == 'R') {
@@ -238,7 +269,6 @@ void messageHandle(LPVOID s) {
         char *host_port = (char *) calloc(6, sizeof(char));
         memcpy(host_port, &message[1], strlen(message) - 1);
         host.push_back(host_port);
-        disconnect[host_port] = 0;
         clientS->send_((char *) "OK");
         /*
         if ( host.empty() || host.end() == find(host.begin(), host.end(), host_port)) {
@@ -248,9 +278,8 @@ void messageHandle(LPVOID s) {
         }
         */
 
-    } else {
-        cout << "[Message] receive other type of message" << endl;
     }
+
     clientS->close_();
     delete clientS;
 
@@ -285,6 +314,7 @@ void report() {
     }
 }
 
+/*
 void revive() {
     while (server_status) {
         if (!host.empty()) {
@@ -303,6 +333,7 @@ void revive() {
         Sleep(REVIVE_INTERVALS * 1000);
     }
 }
+*/
 
 std::ostringstream calculate_time(char *arg_time) {
     char year[5] = {0};
