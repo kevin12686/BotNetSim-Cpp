@@ -10,7 +10,7 @@
 #define PORT "6666"
 #define BUFSIZE 1024
 // Mini Seconds
-#define IDLE 10000
+#define IDLE 5000
 // Max Sensor Per Message
 #define SensorPerMsg 50
 
@@ -67,15 +67,17 @@ int infection(bool *);
 
 // Setting
 // Growing rate(minutes-VT)
-int GROWRATE = 5;
+int GROWRATE = 60;
 // Growing Number
-int GROWNUM = 10;
+int GROWNUM = 20;
 // Start Growing Threshold
-int GROWT = 15;
+int GROWT = 25;
 // Initial PeerList Size
 int PLSIZE = 3;
+// Sending Virtual Time
+bool time_flag = true;
 // Time Spreading Delay(mini seconds-RT)
-short TSD = 240;
+short TSD = 500;
 // MsgType Define
 string msg_token[] = {"Request", "HOST", "CTRL", "EXIT", "R"};
 
@@ -196,7 +198,7 @@ int main() {
     printf("list_getcha : List Getcha\nglobal : Global Status\n");
     printf("timestamp : Current Timestamp\nset_time_rate : Set Time Rate\n");
     printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
-    printf("add_crawler : Add Crawler\n");
+    printf("add_crawler : Add Crawler\nsend_time: Toggle time sending\n");
     string UserCommand = "";
     while (UserCommand != "quit") {
         cin >> UserCommand;
@@ -275,6 +277,13 @@ int main() {
                 thread_handle.push_back(t);
                 thread_id.push_back(id);
             }
+        } else if (UserCommand == "send_time") {
+            if (time_flag) {
+                time_flag = false;
+            } else {
+                time_flag = true;
+            }
+            printf("send_time: %s\n", time_flag ? "True" : "False");
         }
     }
 
@@ -411,8 +420,8 @@ DWORD WINAPI virtual_broadcast(LPVOID console) {
     bool *console_on = (bool *) console;
     while (*console_on) {
         set<HOST *, HOSTPtrComp>::iterator it_i;
-        if (!controler_set.empty()) {
-            for (it_i = controler_set.begin(); it_i != controler_set.end(); it_i++) {
+        if (time_flag && !controler_set.empty()) {
+            for (it_i = controler_set.begin(); it_i != controler_set.end() && *console_on; it_i++) {
                 _socket client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(), BUFSIZE);
                 if (client.get_status()) {
                     string time_msg = "T" + v_t.timestamp();
@@ -428,7 +437,13 @@ DWORD WINAPI virtual_broadcast(LPVOID console) {
                 client.close_();
             }
         }
-        Sleep(TSD);
+        for (int i = 0; i < TSD; i += 200) {
+            if (i + 200 > TSD) {
+                Sleep(TSD - i);
+            } else {
+                Sleep(200);
+            }
+        }
     }
     printf("[INFO] Time Broadcast Thread Stop.\n");
     return 1;
@@ -690,7 +705,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     if (this_host && msg_data == "Peerlist") {
                         set<HOST *, HOSTPtrComp> my_list(bot_set.begin(), bot_set.end());
                         set<HOST *, HOSTPtrComp>::iterator it_find = my_list.find(this_host);
-                        if(it_find != my_list.end() && it_find != my_list.end()){
+                        if (it_find != my_list.end() && it_find != my_list.end()) {
                             my_list.erase(my_list.find(this_host));
                         }
                         set<HOST *, HOSTPtrComp>::iterator bot_i;
@@ -828,14 +843,14 @@ int infection(bool *console) {
         vector<DWORD> tid;
 
         for (target_i = target_list.begin(), client_i = client_list.begin();
-             target_i != target_list.end() && client_i != client_list.end();
+             target_i != target_list.end() && client_i != client_list.end() && *console;
              target_list.erase(target_i), client_list.erase(client_i)) {
             DWORD temp;
             HANDLE t = CreateThread(NULL, 0, handle_bot_spreading,
                                     (LPVOID) new pair<_socket *, HOST *>(*client_i, *target_i), 0, &temp);
             handle.push_back(t);
             tid.push_back(temp);
-            Sleep(10);
+            Sleep(5);
         }
         WaitForMultipleObjects((DWORD) handle.size(), &handle[0], true, INFINITE);
         for (auto i : handle) {
