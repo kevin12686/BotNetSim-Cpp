@@ -40,6 +40,8 @@ char *CONSOLE_IP_ADDRESS;
 char *LOCAL_IP_ADDRESS;
 int LOCAL_TIMEZONE;
 
+string TIMESTAMP;
+
 HANDLE datetimeFileMap;
 BOOL bResult;
 PCHAR lpBuffer = nullptr;
@@ -119,6 +121,7 @@ int main(int argc, char *argv[]) {
     cout << "[INSTRUCTION] Input \'L\' To Show All." << endl;
     cout << "[INSTRUCTION] Input \'H\' To Show Hosts." << endl;
     cout << "[INSTRUCTION] Input \'S\' To Show Suspects." << endl;
+    cout << "[INSTRUCTION] Input \'T\' To Show Timestamp." << endl;
     cout << "[INSTRUCTION] Input \'E\' To Exit." << endl;
 
     char operation;
@@ -128,20 +131,28 @@ int main(int argc, char *argv[]) {
         cin >> operation;
         switch (operation) {
             case 'L':
+            case 'l':
                 cout << "Host Number: " << host.size() << endl;
                 cout << "Suspect Number: " << suspect.size() << endl;
                 break;
             case 'H':
+            case 'h':
                 for (each = host.begin(); each != host.end(); each++) {
                     cout << "HOST => " << LOCAL_IP_ADDRESS << ":" << *each << endl;
                 }
                 break;
             case 'S':
+            case 's':
                 for (each = suspect.begin(); each != suspect.end(); each++) {
                     cout << "SUSPECT > " << *each << endl;
                 }
                 break;
+            case 'T':
+            case 't':
+                cout << "[DateTime] " << TIMESTAMP << endl;
+                break;
             case 'E':
+            case 'e':
                 cout << "[Application] Controller Shutdown!" << endl;
                 server_status = false;
                 FLAG = false;
@@ -243,6 +254,7 @@ void messageHandle(LPVOID s) {
                 printf("[DateTime] MapViewOfFile Success!\n");
 
             CopyMemory(lpBuffer, datetime, 16);
+            TIMESTAMP = datetime;
         }
         /*
         for (short i = 0; i < host.size(); i++) {

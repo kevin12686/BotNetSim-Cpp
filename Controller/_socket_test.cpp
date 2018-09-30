@@ -43,7 +43,7 @@ int main() {
     PCHAR lpBuffer = nullptr;
 
     hFileMap = OpenFileMapping(
-            FILE_MAP_ALL_ACCESS,
+            FILE_MAP_READ,
             FALSE,
             _T("BotNetShareDateTime")
     );
