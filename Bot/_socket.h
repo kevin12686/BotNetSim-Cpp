@@ -8,14 +8,13 @@
 class _socket {
 public:
     static bool Debug;
-    static bool result_mes;
     static const short BOTH = 0, SEND = 1, RECV = 2;
 
     bool static wsastartup_(WSADATA *Wsadata) {
         int iResult = WSAStartup(MAKEWORD(2, 2), Wsadata);
 
         if (iResult != 0) {
-            printf("WSAStartup failed with error: %d\n", iResult);
+            printf("[Error] WSAStartup failed with error: %d\n", iResult);
             return false;
         } else {
             return true;
@@ -32,6 +31,11 @@ public:
 
     ~_socket();
 
+    bool get_status();
+
+    // mini second
+    bool check_recv_(int);
+
     char *recv_();
 
     int send_(char *);
@@ -44,6 +48,9 @@ public:
     int close_();
 
 private:
+    bool status;
+    struct timeval tv;
+    fd_set readfds;
     bool New_char_status;
     int Buffersize;
     char *IP_Address = NULL, *Port = NULL, *RecvBuf = NULL;

@@ -1,11 +1,12 @@
 #include "_socket.h"
 
 bool _socket::Debug = false;
-bool _socket::result_mes = false;
+
 _socket::_socket(SOCKET socket, char *ip, int bufsize) {
     if (_socket::Debug) {
         printf("[Debug INFO] %s connected.\n", ip);
     }
+    this->status = true;
     this->Buffersize = bufsize;
     int len = strlen(ip);
     this->ConnectSocket = socket;
@@ -16,11 +17,14 @@ _socket::_socket(SOCKET socket, char *ip, int bufsize) {
 }
 
 _socket::_socket(char *ip, char *port, int bufsize) {
+    this->status = false;
     this->New_char_status = false;
     this->IP_Address = ip;
     this->Port = port;
     this->Buffersize = bufsize;
-    this->init_();
+    if (this->init_()) {
+        this->status = true;
+    }
     if (_socket::Debug) {
         printf("[Debug INFO] Socket initialized.\n");
     }
@@ -30,23 +34,51 @@ _socket::~_socket() {
     this->clean_();
 }
 
-char *_socket::recv_() {
-    if (_socket::Debug) {
-        printf("[Debug INFO] Socket receive.\n");
+bool _socket::get_status() {
+    return this->status;
+}
+
+bool _socket::check_recv_(int mini_sec) {
+    int temp = -1;
+    FD_ZERO(&this->readfds);
+    FD_SET(this->ConnectSocket, &this->readfds);
+    this->tv.tv_usec = mini_sec % 1000 * 1000;
+    this->tv.tv_sec = (int) (mini_sec / 1000);
+    temp = select(this->ConnectSocket + 1, &this->readfds, NULL, NULL, &this->tv);
+    if (temp == -1) {
+        printf("[Error] Select error. code:%d\n", GetLastError());
+        return false;
+    } else if (temp == 0) {
+        if (_socket::Debug) {
+            printf("[Debug INFO] Select timeout.\n");
+        }
+        return false;
+    } else {
+        return FD_ISSET(this->ConnectSocket, &this->readfds) ? true : false;
     }
+}
+
+char *_socket::recv_() {
     char *data = NULL;
     int iResult = recv(this->ConnectSocket, this->RecvBuf, this->Buffersize, 0);
-    if (iResult > 0)
+    if (iResult > 0) {
+        if (_socket::Debug) {
+            printf("[Debug INFO] Socket receive.\n");
+        }
         data = this->RecvBuf;
-    else if (iResult == 0)
+    } else if (iResult == 0) {
+        if (_socket::Debug) {
+            printf("[Debug INFO] Socket Closed.\n");
+        }
         data = NULL;
-    else {
-        if(_socket::result_mes)
-            printf("Recv failed with error: %d\n", WSAGetLastError());
+    } else {
+        if (_socket::Debug){
+           // printf("[Error] Recv failed with error: %d\n", WSAGetLastError());
+            printf("[%s:%s] [Error] Recv failed with error: %d\n", this->IP_Address, this->Port, WSAGetLastError());
+        }
+
         data = NULL;
     }
-
-
     return data;
 }
 
@@ -56,13 +88,15 @@ int _socket::send_(char *data) {
     }
     int data_len = strlen(data) + 1;
     if (data_len > this->Buffersize) {
-        printf("Send data is out of size(%d).\n", this->Buffersize);
+        printf("[Error] Send data is out of size(%d).\n", this->Buffersize);
         return -1;
     }
     int iResult = send(this->ConnectSocket, data, data_len, 0);
     if (iResult == SOCKET_ERROR) {
-        if(_socket::result_mes)
-            printf("Send failed with error: %d\n", WSAGetLastError());
+        if (_socket::Debug){
+            printf("[Error] Send failed with error: %d\n", WSAGetLastError());
+        }
+
         this->close_();
         return -1;
     }
@@ -90,7 +124,7 @@ bool _socket::shutdown_(short option) {
             break;
     }
     if (iResult == SOCKET_ERROR) {
-        printf("Shutdown failed with error: %d\n", WSAGetLastError());
+        printf("[Error] Shutdown failed with error: %d\n", WSAGetLastError());
         this->close_();
         return false;
     }
@@ -103,7 +137,6 @@ int _socket::close_() {
     }
     int result = closesocket(this->ConnectSocket);
     this->clean_();
-
     return result;
 }
 
@@ -119,7 +152,7 @@ int _socket::init_() {
 
     iResult = getaddrinfo(this->IP_Address, this->Port, &(this->hints), &result);
     if (iResult != 0) {
-        printf("Getaddrinfo failed with error: %d\n", iResult);
+        printf("[Error] Getaddrinfo failed with error: %d\n", iResult);
         this->clean_();
         return 0;
     }
@@ -129,7 +162,7 @@ int _socket::init_() {
         // Create a SOCKET for connecting to server
         this->ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
         if (this->ConnectSocket == INVALID_SOCKET) {
-            printf("Socket failed with error: %ld\n", WSAGetLastError());
+            printf("[Error] Socket failed with error: %ld\n", WSAGetLastError());
             this->clean_();
             return 0;
         }
@@ -147,7 +180,7 @@ int _socket::init_() {
     freeaddrinfo(result);
 
     if (this->ConnectSocket == INVALID_SOCKET) {
-        printf("Unable to connect to server!\n");
+        //printf("[Error] Unable to connect to server!\n");
         this->clean_();
         return 0;
     }
