@@ -4,6 +4,7 @@
 #include <sstream>
 #include <algorithm>
 #include <chrono>
+#include <stdlib.h>
 #include "_socketserver.h"
 #include "Timer.h"
 
@@ -198,7 +199,8 @@ int main() {
     printf("list_getcha : List Getcha\nglobal : Global Status\n");
     printf("timestamp : Current Timestamp\nset_time_rate : Set Time Rate\n");
     printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
-    printf("add_crawler : Add Crawler\nsend_time: Toggle time sending\n");
+    printf("add_crawler : Add Crawler\nsend_time: Toggle Time Sending\n");
+    printf("change_bot_num : Show change_bot Number\nset_change_bot_num: Set change_bot Number\n");
     string UserCommand = "";
     while (UserCommand != "quit") {
         cin >> UserCommand;
@@ -284,6 +286,24 @@ int main() {
                 time_flag = true;
             }
             printf("send_time: %s\n", time_flag ? "True" : "False");
+        } else if (UserCommand == "set_change_bot_num") {
+            printf("Number: ");
+            scanf("%d", &GROWNUM);
+            GROWT = GROWNUM + 5;
+        } else if (UserCommand == "change_bot_num") {
+            printf("Number: %d\n", GROWNUM);
+        } else if (UserCommand == "clear") {
+            system("CLS");
+        } else {
+            printf("quit : Stop the Application\ntime_rate : Get Current Time Rate\n");
+            printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
+            printf("list_bot : List Bot\nlist_ctrl : List Controler\n");
+            printf("list_crawler : List Crawler\nlist_sensor : List Sensor\n");
+            printf("list_getcha : List Getcha\nglobal : Global Status\n");
+            printf("timestamp : Current Timestamp\nset_time_rate : Set Time Rate\n");
+            printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
+            printf("add_crawler : Add Crawler\nsend_time: Toggle Time Sending\n");
+            printf("change_bot_num : Show change_bot Number\nset_change_bot_num: Set change_bot Number\n");
         }
     }
 
@@ -462,7 +482,7 @@ DWORD WINAPI bot_spreading(LPVOID console) {
             if (time_pass >= GROWRATE * 60000 && host_set.size() > GROWT && host_set.size() > GROWNUM) {
                 temp = time_pass / GROWRATE / 60000;
                 time_pass %= GROWRATE * 60000;
-                for (int i = 0; i < temp; i++) {
+                for (int i = 0; i < temp && *console_on; i++) {
                     printf("[INFO] Spreading Wait Lock.\n");
                     WaitForSingleObject(action_lock, INFINITE);
                     printf("[INFO] Spreading Get Lock.\n");
