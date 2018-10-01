@@ -11,7 +11,8 @@ void register_console();
 bool register_controller();
 void accept_thread();
 void client_thread();
-void bot();
+void servent_bot();
+void client_bot();
 void crawler();
 void sensor();
 void send_mes(char );
@@ -22,14 +23,18 @@ void update_time(int []);
 bool compare_with_time(int [], int []);
 int check_exit();
 int check_time();
+int find_min_rank();
 typedef struct peerlist {
     char IP[16];
     char Port[5];
     char ddos_time[15];
+    int rank = 5;
 }PeerList;
-vector<PeerList> vec_Peerlist;      // peerlist清單
+vector<PeerList> vec_Peerlist;          // peerlist 清單
+vector<PeerList> vec_Serventlist;       // serventlist 清單
 vector<PeerList> vec_Ddoslist;
 vector<PeerList> vec_Sensorlist;
+vector<PeerList> vec_Trustlist;
 
 HANDLE QMutex;                      // Lock
 mutex change_mtx;
@@ -40,6 +45,9 @@ _socketserver *s;
 #define IDLE 5000
 bool server_status = false;
 bool debug_mode = false;
+bool sleep_status = false;
+bool check_bot_status = false;
+bool promotion_flag = false;
 char my_ip[15] = "127.0.0.1", my_port[15] = "8000";
 char c_ip[15] = "127.0.0.1", c_port[15] = "6666";
 char* Concole_IP =  c_ip, * Concole_Port = c_port;
@@ -49,6 +57,8 @@ const int MAXPLNum = 15 ;
 int register_flag = -1; // Bot = 1, Crawler = 2, Sensor = 3
 int delay = 0;
 int time_rate = 2000;
+int fans_count = 0;
+int check_bot_rank = 50;
 int main(int argc, char* argv[]) {
     change_mtx.lock();
 
@@ -99,8 +109,8 @@ int main(int argc, char* argv[]) {
     change_mtx.lock(); // 鎖住，等待 Change 指令
 
     if(register_flag == 1){
-        _thread bot_t((int (*)()) bot);
-        bot_t.start();
+        _thread servent_bot_t((int (*)()) servent_bot);
+        servent_bot_t.start();
     }
     else if(register_flag == 2){
         _thread  crawler_t((int (*)())  crawler);
@@ -109,6 +119,9 @@ int main(int argc, char* argv[]) {
     else if(register_flag == 3){
         _thread sensor_t((int (*)()) sensor);
         sensor_t.start();
+    }
+    else if(register_flag ==4){
+        //client bot
     }
 
     // Controller註冊
@@ -132,7 +145,7 @@ int main(int argc, char* argv[]) {
         printf("-----Input '5'  :Show DDOS------\n");
         printf("-----Input '-1' :Exit-------------\n");
         printf("----------------------------------\n");
-        
+
         while(server_status){
             scanf("%d",&inst);
             if(inst == 1)
@@ -191,7 +204,7 @@ void register_console(){
                 buf = strtok(rec_data,p);
                 if(strcmp(buf,"Change") == 0 ){
                     buf=strtok(NULL,p);
-                    if(strcmp(buf,"Bot") == 0 ){
+                    if(strcmp(buf,"ServentBot") == 0 ){
                         register_flag = 1;
                         buf=strtok(NULL,p);
                         if(strcmp(buf,"1") == 0 )
@@ -201,13 +214,16 @@ void register_console(){
                         register_flag = 2;
                     else if(strcmp(buf,"Sensor") == 0 )
                         register_flag = 3;
+                    else if(strcmp(buf,"ClientBot") == 0 )
+                        register_flag = 4;
+
 
                     if( (register_flag == 1)|| (register_flag == 2) ){  // Bot & Crawler 要求 Peerlist
                         c.send_((char *) "Request:Peerlist");
                         memset(rec_data,'\0',1024);
                         rec_data = c.recv_();
                         if(rec_data){
-                            if(register_flag == 1){            // Bot
+                            if(register_flag == 1){            // Servent_Bot
                                 c.send_((char *)"EXIT" );
                                 handle_recv_mes(rec_data);
                                 change_mtx.unlock();
@@ -235,6 +251,16 @@ void register_console(){
                     }
                     else if(register_flag == 3){            // Sensor
                         change_mtx.unlock();
+                    }
+                    else if(register_flag == 4){            // ClientBot
+                        c.send_((char *) "Request:Serventlist");
+                        memset(rec_data,'\0',1024);
+                        rec_data = c.recv_();
+                        if(rec_data){
+                            c.send_((char *)"EXIT" );
+                            handle_recv_mes(rec_data);
+                            change_mtx.unlock();
+                        }
                     }
                 }
                 else if(strcmp(buf,"OK") == 0 ){
@@ -310,16 +336,9 @@ void accept_thread() {
             ClientQ.push(s->accept_());
             ReleaseMutex(QMutex);
             client_thread();
-            //t = new _thread((int (*)()) client_thread);
-            //t->start();
-            //ClientT.push_back(t);
+
         }
-    }/*
-    vector<_thread *>::iterator it_i;
-    for (it_i = ClientT.begin(); it_i != ClientT.end(); it_i++) {
-        (*it_i)->join();
-        delete (*it_i);
-    }*/
+    }
     if(debug_mode)
         cout << "Stop accepting..." << endl;
 }
@@ -334,53 +353,60 @@ void client_thread() {
     char send_data[1024]={};
     memset(send_data,'\0',1024);
     rec_data = client->recv_();
-    if(rec_data){
-        rec_flag = handle_recv_mes(rec_data);
-        if( (rec_flag != 'T') && (delay == 1)){
+    if(!sleep_status){  // Sleep_Bot 只收訊息 但不回訊息
+        if(rec_data){
+            rec_flag = handle_recv_mes(rec_data);
+            if( (rec_flag != 'T') && (delay == 1)){
                 int temp = rand()%5000;
                 Sleep(temp);
-        }
-        if( (rec_flag ==  'E') && (register_flag!=3)){
-            handle_send_mes(rec_flag,send_data);
-            client->send_(send_data);
-        }
-        else if(rec_flag == 'D'){
-            send_mes('D');
-        }
-        else if( (rec_flag == 'B')||(rec_flag == 'C') ){
-            client->send_((char *)"Request:Peerlist" );
-            memset(rec_data,'\0',1024);
-            rec_data = client->recv_();
-            if(rec_data){
-                handle_recv_mes(rec_data);
-                if(rec_flag == 'B'){
-                    client->send_((char *)"EXIT" );
-                    register_flag = 1;
-                    change_mtx.unlock();
-                }
-                else if (rec_flag == 'C'){
-                    client->send_((char *)"Request:Sensorlist" );
-                    memset(rec_data,'\0',1024);
-                    rec_data = client->recv_();
-                    if(rec_data){
-                        register_flag = 2;
-                        handle_recv_mes(rec_data);
+            }
+            if( (rec_flag ==  'E') && (register_flag!=3)){
+                handle_send_mes(rec_flag,send_data);
+                client->send_(send_data);
+            }
+            else if(rec_flag == 'D'){
+                send_mes('D');
+            }
+            else if(rec_flag == 'L'){       // Release -- Servent_Bot 回傳給 Client_Bot DDOS訊息
+                handle_send_mes('D',send_data);
+                client->send_(send_data);
+            }
+            else if( (rec_flag == 'B')||(rec_flag == 'C') ){    // 註冊 要求 List
+                client->send_((char *)"Request:Peerlist" );
+                memset(rec_data,'\0',1024);
+                rec_data = client->recv_();
+                if(rec_data){
+                    handle_recv_mes(rec_data);
+                    if(rec_flag == 'B'){
                         client->send_((char *)"EXIT" );
+                        register_flag = 1;
                         change_mtx.unlock();
                     }
+                    else if (rec_flag == 'C'){
+                        client->send_((char *)"Request:Sensorlist" );
+                        memset(rec_data,'\0',1024);
+                        rec_data = client->recv_();
+                        if(rec_data){
+                            register_flag = 2;
+                            handle_recv_mes(rec_data);
+                            client->send_((char *)"EXIT" );
+                            change_mtx.unlock();
+                        }
+                    }
+                }
+                else{
+                    if(debug_mode)
+                        printf("[INFO] Request Peerlist failed\n");
+                    register_flag = -1;
                 }
             }
-            else{
-                if(debug_mode)
-                    printf("[INFO] Request Peerlist failed\n");
-                register_flag = -1;
+            else if(rec_flag == 'S'){
+                register_flag = 3;
+                change_mtx.unlock();
             }
         }
-        else if(rec_flag == 'S'){
-            register_flag = 3;
-            change_mtx.unlock();
-        }
     }
+
 
 
     client->close_();
@@ -388,14 +414,47 @@ void client_thread() {
     delete[] rec_data;
 }
 
-void bot(){
+void servent_bot(){
     srand( (unsigned)time(NULL) );
     if(debug_mode)
-        printf("-------Bot--------\n");
+        printf("-------Servent Bot--------\n");
+    Sleep(3000);
+    while(server_status){ // 有無開機
+        if(!sleep_status){      // 檢查 Sleep_Bot
+            if(vec_Peerlist.size() > 1){    // Exchange_PeerList
+                send_mes('E');
+            }
+            if(vec_Ddoslist.size() > 0){
+                if( strcmp(time_stamp,vec_Ddoslist[0].ddos_time) >= 0){ // Attack
+                    send_mes('A');
+                }
+            }
+            if(!check_bot_status){  // Check_Bot
+                if( (fans_count > 25) & (!promotion_flag)){     // Promotion
+                    send_mes('P');
+                    promotion_flag = true;
+                }
+                else if( (fans_count > check_bot_rank) & promotion_flag){   // 累積達到一定數量轉變成Check Bot
+                    check_bot_status = true;
+                }
+            }
+            else{
+                // 做 Check_Bot 的事
+            }
+
+        }
+
+        Sleep(4000);
+    }
+};
+void client_bot(){
+    srand( (unsigned)time(NULL) );
+    if(debug_mode)
+        printf("-------Client Bot--------\n");
     Sleep(3000);
     while(server_status){
-        if(vec_Peerlist.size() > 1){
-            send_mes('E');        // Exchange_PeerList
+        if(vec_Serventlist.size() > 0){
+            send_mes('Q'); // Quest
         }
         if(vec_Ddoslist.size() > 0){
             if( strcmp(time_stamp,vec_Ddoslist[0].ddos_time) >= 0){
@@ -404,7 +463,8 @@ void bot(){
         }
         Sleep(4000);
     }
-};
+}
+
 void crawler(){
     srand( (unsigned)time(NULL) );
     if(debug_mode)
@@ -441,15 +501,35 @@ void send_mes(char flag){
                 cout << "[Send]--->"<<vec_Peerlist[send_num].IP << ":" << vec_Peerlist[send_num].Port <<":[" <<send_data << "]"<<endl;
             if(c.check_recv_(IDLE)) {   // Check recv
                 rec_data = c.recv_();
-                if(rec_data)
+                if(rec_data){
+                    vec_Peerlist[send_num].rank++;  // 聲譽值增加
                     handle_recv_mes(rec_data);
+                }
             }
             else{
+                if(vec_Peerlist[send_num].rank > 0){
+                    vec_Peerlist[send_num].rank--;  // 聲譽值減少
+                }
                 if(debug_mode)
                     printf("Recv Time out\n");
             }
         }
         c.close_();
+        // [注意有無互斥問題]
+        if( (vec_Peerlist[send_num].rank > 15) & (register_flag == 1)){ // 告知對方 Fans+1 ， Push 進 Trustlist
+            peerlist p1;
+            strcpy(p1.IP,vec_Peerlist[send_num].IP);
+            strcpy(p1.Port,vec_Peerlist[send_num].Port);
+            p1.rank = vec_Peerlist[send_num].rank;
+
+            _socket c( vec_Peerlist[send_num].IP,  vec_Peerlist[send_num].Port, 1024);
+            c.send_((char *)"Fans_Add");
+            c.close_();
+
+            vec_Trustlist.push_back(p1);
+            vec_Peerlist.erase(vec_Peerlist.begin() + send_num);
+        }
+        //
     }
     else if(flag =='D'){    // DDOS
         for(int i=0 ;i < vec_Peerlist.size(); i++){
@@ -485,14 +565,43 @@ void send_mes(char flag){
         }
         c.close_();
     }
+    else if(flag =='Q'){        // ClientBot Quest 詢問有無事件
+        _socket c( (char*)vec_Peerlist[send_num].IP,  (char*)vec_Peerlist[send_num].Port, 1024);
+        if(c.get_status()){
+            c.send_(send_data );
+            if(debug_mode)
+                printf("[Send]--->%s:%s:[%s]\n", vec_Sensorlist[send_num].IP,vec_Sensorlist[send_num].Port,send_data);
+            if(c.check_recv_(IDLE)) {   // Check recv
+                rec_data = c.recv_();
+                if(rec_data)
+                    handle_recv_mes(rec_data);
+            }
+            else{
+                if(debug_mode)
+                    printf("Recv Time out\n");
+            }
+        }
+    }
+    else if(flag =='P'){    // Promotion 晉升 Sleep_Bot or 等待變Check_Bot
+        _socket c( Concole_IP,  Concole_Port, 1024); // socket Console
+        if(c.get_status()){
+            c.send_(send_data );
+            if(debug_mode)
+                printf("[Send]--->Console:[%s]\n",send_data);
+            rec_data = c.recv_();
+            if(rec_data){
+                handle_recv_mes(rec_data);
+            }
+        }
+    }
     delete[] rec_data;
     delete[] send_data;
 }
 int handle_send_mes(char flag, char *send_buf){
     //  格式[ 發送時間:到期時間:指令:目標IP:目標Port:發送端IP:發送端Port ]
     memset(send_buf,'\0',1024);
-    int send_num = -1,time_t[6]={};
-    char time_expire[15]={}, instr[20];
+    int send_num = 0,time_t[6]={};
+    char time_expire[15]={};
 
     time_to_int(time_stamp,time_t); //   [0]年 [1]月 [2]日 [3]時 [4]分 [5]秒
     time_t[2] = time_t[2] + 3; // 訊息三天過期
@@ -500,27 +609,40 @@ int handle_send_mes(char flag, char *send_buf){
 
     send_num = rand()%vec_Peerlist.size();
 
-    int tar_num = -1;
+    int tar_num = 0;
     if (flag == 'E'){
-        strcpy(instr,"Exchange_peerlist");
         do{
             tar_num = rand()%vec_Peerlist.size();
         }while((send_num == tar_num) || tar_num < 0);
-        if(register_flag == 1) // Bot
-            sprintf(send_buf,"%s:%s:%s:%s:%s:%s:%s",time_stamp ,time_expire ,instr ,vec_Peerlist[tar_num].IP ,vec_Peerlist[tar_num].Port, my_ip, my_port);
-        if(register_flag == 2){// Crawler
-            int  sensor_num =  rand()%vec_Sensorlist.size();
-            sprintf(send_buf,"%s:%s:%s:%s:%s:%s:%s",time_stamp ,time_expire ,instr ,vec_Sensorlist[sensor_num].IP ,vec_Sensorlist[sensor_num].Port, my_ip, my_port);
-        }
 
+        if(register_flag == 1){ // Servent Bot
+            if(vec_Trustlist.size() > 0){   // 優先交換 聲譽值高的給別人
+                tar_num = rand()%vec_Trustlist.size();
+                sprintf(send_buf,"%s:%s:%s:%s:%s:%s:%s",time_stamp ,time_expire ,"Exchange_peerlist" ,vec_Trustlist[tar_num].IP ,vec_Trustlist[tar_num].Port, my_ip, my_port);
+            }
+            else{
+                sprintf(send_buf,"%s:%s:%s:%s:%s:%s:%s",time_stamp ,time_expire ,"Exchange_peerlist" ,vec_Peerlist[tar_num].IP ,vec_Peerlist[tar_num].Port, my_ip, my_port);
+
+            }
+        }
+        if(register_flag == 2){     // Crawler
+            int  sensor_num =  rand()%vec_Sensorlist.size();
+            sprintf(send_buf,"%s:%s:%s:%s:%s:%s:%s",time_stamp ,time_expire ,"Exchange_peerlist" ,vec_Sensorlist[sensor_num].IP ,vec_Sensorlist[sensor_num].Port, my_ip, my_port);
+        }
     }
     else if(flag == 'D'){
-        strcpy(instr,"DDOS");
         tar_num = vec_Ddoslist.size()-1;
-        sprintf(send_buf,"%s:%s:%s:%s:%s:%s:%s",time_stamp ,vec_Ddoslist[tar_num].ddos_time ,instr ,vec_Ddoslist[tar_num].IP ,vec_Ddoslist[tar_num].Port, my_ip, my_port);
+        sprintf(send_buf,"%s:%s:%s:%s:%s:%s:%s",time_stamp ,vec_Ddoslist[tar_num].ddos_time ,"DDOS" ,vec_Ddoslist[tar_num].IP ,vec_Ddoslist[tar_num].Port, my_ip, my_port);
     }
     else if(flag == 'R'){ // Report
         sprintf(send_buf,"R%s:%s",vec_Peerlist[0].IP, vec_Peerlist[0].Port);
+    }
+    else if( flag == 'Q'){ // Client_Bot Quest
+        sprintf(send_buf,"%s:%s:%s",time_stamp ,time_expire ,"Quest" );
+        send_num = rand()%vec_Serventlist.size()-1;
+    }
+    else if( flag == 'P'){ // 晉升 Promotion
+        sprintf(send_buf,"%s","Promotion");
     }
     else
         return -1;
@@ -546,6 +668,10 @@ char handle_recv_mes(char data[]) {
                     change_mtx.unlock();
                     return 'N';
                 }
+                else if(strcmp(buf,"Fans_Add") == 0 ){     // Fans + 1
+                    fans_count++;
+                    return 'N';
+                }
                 else if(strcmp(buf,"C") == 0 ){     // 更改時間頻率
                     buf=strtok(NULL,p);
                     time_rate = atoi(buf);
@@ -553,11 +679,14 @@ char handle_recv_mes(char data[]) {
                         printf("[Update Time Rate] :%d\n",time_rate);
                     return 'N';
                 }
+                else if(strcmp(buf,"Accumulate") == 0 ){     // Fans + 1
+                    return 'N';
+                }
                 else if(strcmp(buf,"T") == 0 )
                     update_time_flag = true;
                 else if(strcmp(buf,"Change") == 0){
                     buf=strtok(NULL,p);
-                    if(strcmp(buf,"Bot") == 0 ){
+                    if(strcmp(buf,"ServentBot") == 0 ){
                         register_flag = 1;
                         rtn_flag = 'B';
                         buf=strtok(NULL,p);
@@ -571,6 +700,11 @@ char handle_recv_mes(char data[]) {
                         rtn_flag = 'C';
                     else if(strcmp(buf,"Sensor") == 0 )
                         rtn_flag = 'S';
+                    else if(strcmp(buf,"SleepBot") == 0 ){
+                        sleep_status = true;
+                        rtn_flag = 'N';
+                    }
+
                 }
                 else if(strcmp(buf,"Peerlist") == 0 ){
                     buf=strtok(NULL,p);
@@ -599,6 +733,25 @@ char handle_recv_mes(char data[]) {
                         buf=strtok(NULL,p);
                     }
                 }
+                else if(strcmp(buf,"Serventlist") == 0 ){
+                    buf=strtok(NULL,p);
+                    count = 0;
+                    PeerList p1;
+                    while(buf){
+                        count = count%2;
+                        if(count == 0){
+                            memset(p1.IP,'\0',16);
+                            strcpy(p1.IP,buf);
+                        }
+                        else{
+                            strcpy(p1.Port,buf);
+                            memset(p1.Port,'\0',5);
+                            vec_Serventlist.push_back(p1);
+                        }
+                        count++;
+                        buf=strtok(NULL,p);
+                    }
+                }
                 else if((strcmp(buf,"Sensorlist") == 0) ){
                     buf=strtok(NULL,p);
                     count = 0;;
@@ -618,8 +771,8 @@ char handle_recv_mes(char data[]) {
             case 1 :
                 if(update_time_flag){
                     strcpy(time_stamp,buf); // 更新時間
-                  // if(debug_mode)
-                       // printf("[Update Time] :%s\n",time_stamp);
+                    // if(debug_mode)
+                    // printf("[Update Time] :%s\n",time_stamp);
                     return 'T';
                 }
                 else{
@@ -642,6 +795,16 @@ char handle_recv_mes(char data[]) {
                         return 'N';
                     DDOS_flag = true;
                 }
+                else if(strcmp(buf,"Quest") == 0){
+                    if(register_flag == 1){     // Servent Bot 才做， 回覆 Client_Bot
+                        if(vec_Ddoslist.size() > 0){
+                            return 'L';
+                        }
+                    }
+                    else{
+                        return 'N';
+                    }
+                }
                 break;
             case 3 :
                 strcpy(p1.IP,buf);
@@ -659,17 +822,17 @@ char handle_recv_mes(char data[]) {
                     if(rtn_flag != 'E'){
                         vec_Peerlist.push_back(p1);
                         if ( (vec_Peerlist.size() > MAXPLNum)  ){    // Bot PeerList太多要刪掉
-                            int rand_num = rand()%vec_Peerlist.size();
-                            vec_Peerlist.erase(vec_Peerlist.begin() + rand_num);
+                            int del_num = find_min_rank();       // 刪除聲譽值最低的
+                            vec_Peerlist.erase(vec_Peerlist.begin() + del_num);
                         }
                         rtn_flag = 'E';
                     }
                 }
                 else if (DDOS_flag){
-                    for(int i=0 ;i < vec_Ddoslist.size(); i++){ // 檢查 對方傳的IP,Port有無重複
+                    for(int i=0 ;i < vec_Ddoslist.size(); i++){ // 檢查 DDOS 有無重複
                         if(strcmp(vec_Ddoslist[i].IP,p1.IP) == 0)
                             if(strcmp(vec_Ddoslist[i].Port,p1.Port) == 0)
-                                return 'N'; // IP重複
+                                return 'N'; // DDOS 重複
                     }
                     strcpy(p1.ddos_time,time_expire);
                     // 還要處理時間進位
@@ -804,7 +967,7 @@ int check_exit(){
             }
             else {
                 //if(debug_mode)
-                    //printf("UnmapViewOfFile Success!\n");
+                //printf("UnmapViewOfFile Success!\n");
             }
             CloseHandle(hFileMap);
             server_status = false;
@@ -820,23 +983,21 @@ int check_time(){
     char data[20] = {};
     char * buffer;
 
-        while(true){
-            if(OpenClipboard(0)){
-                buffer = (char*)GetClipboardData(CF_TEXT);
-                if(buffer){
-                    if(debug_mode)
-                        printf("%s\n",buffer);
-                    strcpy(data,buffer);
+    while(true){
+        if(OpenClipboard(0)){
+            buffer = (char*)GetClipboardData(CF_TEXT);
+            if(buffer){
+                if(debug_mode)
+                    printf("%s\n",buffer);
+                strcpy(data,buffer);
 
-                    strtok(data,p);
-                    buf = strtok(NULL,p);
-                    strcpy(time_stamp,buf);
-                }
+                strtok(data,p);
+                buf = strtok(NULL,p);
+                strcpy(time_stamp,buf);
             }
-            Sleep(500);
         }
-
-
+        Sleep(500);
+    }
     CloseClipboard();
     return 0;
     /*
@@ -875,4 +1036,15 @@ int check_time(){
         }
         Sleep(500);
     }*/
+}
+int find_min_rank(){
+    int temp = 0, size = 0, least = 12;
+    size = vec_Peerlist.size();
+    for(int i = 0;i < size;i++ ){
+        if(vec_Peerlist[i].rank < least){   // least = 目前找到的最低聲譽值
+            least = vec_Peerlist[i].rank;
+            temp = i;
+        }
+    }
+    return temp;
 }

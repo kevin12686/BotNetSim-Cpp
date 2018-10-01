@@ -161,28 +161,38 @@ int main() {
 char* get_IP(){
     //  调用WSAStarup初始化WINsock库
     WSADATA wsaData;
-    ::WSAStartup(
-            MAKEWORD(2,2),
-            &wsaData);
-
+    ::WSAStartup(MAKEWORD(2,2),&wsaData);
     //  存放主机名的缓冲区
     char szHost[256];
+    char *strIp = nullptr;
+    char temp[20];
     //  取得本地主机名称
     ::gethostname(szHost, 256);
     //  通过主机名得到地址信息，一个主机可能有多个网卡，多个IP地址
     hostent *pHost = ::gethostbyname(szHost);
     in_addr addr;
-    //获得地址（网络字节序）
-    char *p = pHost->h_addr_list[0];
-    if (p == NULL) {
-        return (char*)"Failed";
-    }
-    //  将地址拷贝到in_addr结构体中
-    memcpy(&addr.S_un.S_addr, p, pHost->h_length);
-    //  将in_addr转换为主机字节序
-    char *strIp = ::inet_ntoa(addr);
+    int i;
+    for (i = 0;; i++){
+        //获得地址（网络字节序）
+        char *p = pHost->h_addr_list[i];
+        if (p == NULL){
+            break;
+        }
+        //  将地址拷贝到in_addr结构体中
+        memcpy(&addr.S_un.S_addr, p, pHost->h_length);
+        //  将in_addr转换为主机字节序
+        char *strIp = ::inet_ntoa(addr);
+        strcpy(temp,strIp);
+        if( (temp[0]=='1') & (temp[1]=='9') & (temp[2]=='2') ){
 
+        }
+        else{
+            ::WSACleanup();
+            return strIp;
+        }
+    }
     //  终止对Winsock库的使用
+
     ::WSACleanup();
-    return strIp;
+    return (char*)"Failed";
 }

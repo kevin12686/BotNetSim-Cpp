@@ -48,7 +48,7 @@ _socket *_socketserver::accept_() {
     _socket *client = NULL;
     SOCKET ClientSocket = accept(this->ListenSocket, (struct sockaddr *) &clientinfo, &infosize);
     if (ClientSocket == INVALID_SOCKET) {
-        printf("Accept failed with error: %d\n", WSAGetLastError());
+        //printf("Accept failed with error: %d\n", WSAGetLastError());
         this->close_();
     } else {
         client = new _socket(ClientSocket, inet_ntoa(clientinfo.sin_addr), this->Buffersize);
