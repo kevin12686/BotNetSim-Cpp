@@ -11,7 +11,6 @@
 
 #define LOCAL_PORT 1999
 #define REPORT_INTERVALS 5
-#define REVIVE_INTERVALS 5
 
 using namespace std;
 
@@ -68,6 +67,15 @@ int main(int argc, char *argv[]) {
 
     LOCAL_TIMEZONE = std::atoi(argv[3]);
 
+    if(!OpenClipboard(0)) {
+        printf("OpenClipboard Failed!\n");
+        return GetLastError();
+    }
+
+    EmptyClipboard();
+
+
+    /*
     datetimeFileMap = CreateFileMapping(
             INVALID_HANDLE_VALUE,
             nullptr,
@@ -84,8 +92,8 @@ int main(int argc, char *argv[]) {
             printf("[DateTime] CreateFileMapping Success!\n");
     }
 
+    */
 
-    // 創建監聽socket
 
     WSADATA wsadata;
     _socket::wsastartup_(&wsadata);
@@ -106,13 +114,13 @@ int main(int argc, char *argv[]) {
 
     listenSocket = new _socketserver((char *) "1999", 1024);
 
-    // 收訊息Thread
+    // ?嗉??狼hread
     accept_t.handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) socketAccept, NULL, 0, &(accept_t.id));
 
-    // 回報Thread
+    // ?Thread
     report_t.handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) report, NULL, 0, &(report_t.id));
 
-    // 重生Thread
+    // ??Thread
     //revive_t.handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) revive, NULL, 0, &(revive_t.id));
 
     Sleep(1000);
@@ -184,7 +192,7 @@ int main(int argc, char *argv[]) {
             printf("[DateTime] UnmapViewOfFile Success!\n");
     }
 
-    // 清理垃圾
+    // 皜??
     delete listenSocket;
 
     return 0;
@@ -234,7 +242,7 @@ void messageHandle(LPVOID s) {
         cout << "[Message] From " << clientS->getIPAddr() << " : " << message << endl;
 
     char msg_type = message[0];
-    // 判斷收到訊息 s 類型
+
     // T for time, R for Report, S for Sign up
     if (msg_type == 'T') {
 
@@ -243,6 +251,14 @@ void messageHandle(LPVOID s) {
         strncpy(datetime, &message[1], 14);
         strncpy(datetime, (char *) calculate_time(datetime).str().c_str(), 16);
 
+        const size_t len = strlen(datetime) + 1;
+        HGLOBAL hMem =  GlobalAlloc(GMEM_MOVEABLE, len);
+        memcpy(GlobalLock(hMem), datetime, len);
+        GlobalUnlock(hMem);
+        SetClipboardData(CF_TEXT, hMem);
+        TIMESTAMP = datetime;
+
+        /*
         lpBuffer = (PCHAR) MapViewOfFile(datetimeFileMap, FILE_MAP_ALL_ACCESS, 0, 0, 256);
 
         if (lpBuffer == nullptr) {
@@ -256,6 +272,7 @@ void messageHandle(LPVOID s) {
             CopyMemory(lpBuffer, datetime, 16);
             TIMESTAMP = datetime;
         }
+         */
         /*
         for (short i = 0; i < host.size(); i++) {
             if (disconnect[host[i]] < 10) {
