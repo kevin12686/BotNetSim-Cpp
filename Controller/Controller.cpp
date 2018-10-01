@@ -2,9 +2,12 @@
 #include <queue>
 #include <string>
 #include <sstream>
+#include <fstream>
 #include <iomanip>
 #include <map>
 #include <algorithm>
+#include <random>
+#include <chrono>
 #include <tchar.h>
 #include "_socket.h"
 #include "_socketserver.h"
@@ -19,15 +22,17 @@ typedef struct MYTHREAD {
     DWORD id;
 } MyThread;
 
+
 void socketAccept();
 
 void messageHandle(LPVOID);
 
 void report();
 
-// void revive();
+char *getLocalIP();
 
-std::ostringstream calculate_time(char *);
+ostringstream calculate_time(char *);
+
 
 vector<char *> suspect;
 vector<char *> host;
@@ -35,64 +40,59 @@ _socketserver *listenSocket;
 
 bool server_status = false;
 
-char *CONSOLE_IP_ADDRESS;
+char *CONSOLE_IP_ADDRESS = new char[16]{0};
 char *LOCAL_IP_ADDRESS;
 int LOCAL_TIMEZONE;
 
 string TIMESTAMP;
 
-HANDLE datetimeFileMap;
-BOOL bResult;
-PCHAR lpBuffer = nullptr;
-
 bool CONTROL_DEBUG = false;
 
 int main(int argc, char *argv[]) {
-    if (argc != 4) {
-        cout << "Please input three parameters \'console ip\', \'local ip\', \'timezone\'." << endl;
-        return 0;
-    }
+
+    unsigned seed = chrono::system_clock::now().time_since_epoch().count();
+    default_random_engine generator(seed);
+    uniform_int_distribution<int> dis(-9, 9);
+    LOCAL_TIMEZONE = dis(generator);
 
     MyThread accept_t;
     MyThread report_t;
-    // MyThread revive_t;
 
-    size_t console_ip_length = strlen(argv[1]) + 1;
-    CONSOLE_IP_ADDRESS = new char[console_ip_length]{0};
-    strcpy_s(CONSOLE_IP_ADDRESS, console_ip_length, argv[1]);
+    /* Get Console IP Address From File */
 
-    size_t local_ip_length = strlen(argv[2]) + 1;
+    fstream fin("Console.txt");
+    if (!fin) {
+        printf("[Error] Console.txt Not Found!\n");
+    } else {
+        fin.getline(CONSOLE_IP_ADDRESS, 16, '\n');
+    }
+    if (!CONSOLE_IP_ADDRESS) {
+        printf("[Error] Cannot Get Console IP Address!\nPlease Input Console IP Address:\n");
+        cin >> CONSOLE_IP_ADDRESS;
+    }
+
+    /* Get Local IP Address From Function */
+
+    size_t local_ip_length = strlen(getLocalIP()) + 1;
     LOCAL_IP_ADDRESS = new char[local_ip_length]{0};
-    strcpy_s(LOCAL_IP_ADDRESS, local_ip_length, argv[2]);
+    strcpy_s(LOCAL_IP_ADDRESS, local_ip_length, getLocalIP());
 
-    LOCAL_TIMEZONE = std::atoi(argv[3]);
+    if (!strcmp(LOCAL_IP_ADDRESS, "Failed")) {
+        printf("[Error] Cannot Get Local IP Address!\nPlease Input Local IP Address:\n");
+        cin >> LOCAL_IP_ADDRESS;
+    }
 
-    if(!OpenClipboard(0)) {
+    printf("[Application] Console IP Address: %s\n", CONSOLE_IP_ADDRESS);
+    printf("[Application] Local IP Address: %s\n", LOCAL_IP_ADDRESS);
+    printf("[Application] TIMEZONE: %d\n", LOCAL_TIMEZONE);
+
+
+    if (!OpenClipboard(nullptr)) {
         printf("OpenClipboard Failed!\n");
-        return GetLastError();
+        exit((int) GetLastError());
     }
 
     EmptyClipboard();
-
-
-    /*
-    datetimeFileMap = CreateFileMapping(
-            INVALID_HANDLE_VALUE,
-            nullptr,
-            PAGE_READWRITE,
-            0,
-            256,
-            _T("BotNetShareDateTime"));
-
-    if (!datetimeFileMap) {
-        printf("[DateTime] CreateFileMapping Failed Error: %d.\n", GetLastError());
-        return 0;
-    } else {
-        if(CONTROL_DEBUG)
-            printf("[DateTime] CreateFileMapping Success!\n");
-    }
-
-    */
 
 
     WSADATA wsadata;
@@ -107,21 +107,17 @@ int main(int argc, char *argv[]) {
     strcat(msg, std::to_string(LOCAL_PORT).c_str());
     if (socket2Console.send_(msg) == -1) {
         cout << "[Socket] Send Message To Console Failed" << endl;
-        return 0;
+        exit(-1);
     }
     socket2Console.close_();
 
 
     listenSocket = new _socketserver((char *) "1999", 1024);
 
-    // ?嗉??狼hread
-    accept_t.handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) socketAccept, NULL, 0, &(accept_t.id));
 
-    // ?Thread
-    report_t.handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) report, NULL, 0, &(report_t.id));
+    accept_t.handle = CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE) socketAccept, nullptr, 0, &(accept_t.id));
 
-    // ??Thread
-    //revive_t.handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) revive, NULL, 0, &(revive_t.id));
+    report_t.handle = CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE) report, nullptr, 0, &(report_t.id));
 
     Sleep(1000);
 
@@ -177,22 +173,6 @@ int main(int argc, char *argv[]) {
     WaitForSingleObject(report_t.handle, INFINITE);
     CloseHandle(report_t.handle);
 
-    /*
-    WaitForSingleObject(revive_t.handle, INFINITE);
-    CloseHandle(revive_t.handle);
-    */
-
-    bResult = UnmapViewOfFile(lpBuffer);
-    if (!bResult) {
-        printf("[DateTime] UnmapViewOfFile Failed Error: %d.\n", GetLastError());
-        exit(-1);
-    }
-    else {
-        if(CONTROL_DEBUG)
-            printf("[DateTime] UnmapViewOfFile Success!\n");
-    }
-
-    // 皜??
     delete listenSocket;
 
     return 0;
@@ -213,7 +193,7 @@ void socketAccept() {
             _socket *client = listenSocket->accept_();
 
             MyThread *temp = new MyThread;
-            temp->handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) messageHandle, (LPVOID) client, 0,
+            temp->handle = CreateThread(nullptr, 0, (LPTHREAD_START_ROUTINE) messageHandle, (LPVOID) client, 0,
                                         &(temp->id));
             if (temp->handle) {
                 if (CONTROL_DEBUG) {
@@ -252,38 +232,12 @@ void messageHandle(LPVOID s) {
         strncpy(datetime, (char *) calculate_time(datetime).str().c_str(), 16);
 
         const size_t len = strlen(datetime) + 1;
-        HGLOBAL hMem =  GlobalAlloc(GMEM_MOVEABLE, len);
+        HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, len);
         memcpy(GlobalLock(hMem), datetime, len);
         GlobalUnlock(hMem);
         SetClipboardData(CF_TEXT, hMem);
         TIMESTAMP = datetime;
 
-        /*
-        lpBuffer = (PCHAR) MapViewOfFile(datetimeFileMap, FILE_MAP_ALL_ACCESS, 0, 0, 256);
-
-        if (lpBuffer == nullptr) {
-            if (CONTROL_DEBUG)
-                printf("[DateTime] MapViewOfFile Failed Error: %d.\n", GetLastError());
-
-        } else {
-            if (CONTROL_DEBUG)
-                printf("[DateTime] MapViewOfFile Success!\n");
-
-            CopyMemory(lpBuffer, datetime, 16);
-            TIMESTAMP = datetime;
-        }
-         */
-        /*
-        for (short i = 0; i < host.size(); i++) {
-            if (disconnect[host[i]] < 10) {
-                _socket sConnect(LOCAL_IP_ADDRESS, host[i], 1024);
-                if (sConnect.send_(datetime) == -1) {
-                    disconnect[host[i]]++;
-                }
-                sConnect.close_();
-            }
-        }
-        */
         delete[] datetime;
 
     } else if (msg_type == 'R') {
@@ -299,13 +253,6 @@ void messageHandle(LPVOID s) {
         memcpy(host_port, &message[1], strlen(message) - 1);
         host.push_back(host_port);
         clientS->send_((char *) "OK");
-        /*
-        if ( host.empty() || host.end() == find(host.begin(), host.end(), host_port)) {
-            host.push_back(host_port);
-            disconnect[host_port] = 0;
-            clientS->send_((char *) "OK");
-        }
-        */
 
     }
 
@@ -343,28 +290,8 @@ void report() {
     }
 }
 
-/*
-void revive() {
-    while (server_status) {
-        if (!host.empty()) {
-            // report
-            map<char *, short>::iterator it;
-            for (it = disconnect.begin(); it != disconnect.end(); it++) {
-                if (it->second >= 10) {
-                    _socket test_socket(LOCAL_IP_ADDRESS, it->first, 1024);
-                    if (test_socket.send_((char *) "TEST") != -1) {
-                        it->second = 0;
-                    }
-                    test_socket.close_();
-                }
-            }
-        }
-        Sleep(REVIVE_INTERVALS * 1000);
-    }
-}
-*/
 
-std::ostringstream calculate_time(char *arg_time) {
+ostringstream calculate_time(char *arg_time) {
     char year[5] = {0};
     char month[3] = {0};
     char day[3] = {0};
@@ -437,4 +364,42 @@ std::ostringstream calculate_time(char *arg_time) {
 
     return timezone_datetime;
 
+}
+
+
+char *getLocalIP() {
+
+    WSADATA wsaData;
+    ::WSAStartup(
+            MAKEWORD(2, 2),
+            &wsaData);
+
+
+    char szHost[256];
+    ::gethostname(szHost, 256);
+
+    hostent *pHost = ::gethostbyname(szHost);
+    in_addr addr;
+
+    for (short i = 0;; i++) {
+
+        char *p = pHost->h_addr_list[i];
+        if (p == nullptr) {
+            break;
+        }
+        memcpy(&addr.S_un.S_addr, p, pHost->h_length);
+
+        char *strIp = ::inet_ntoa(addr);
+        char *temp = new char[20]{0};
+        strcpy(temp, strIp);
+        if ((temp[0] == '1') & (temp[1] == '9') & (temp[2] == '2')) {
+
+        } else {
+            ::WSACleanup();
+            return strIp;
+        }
+    }
+
+    ::WSACleanup();
+    return (char *) "Failed";
 }
