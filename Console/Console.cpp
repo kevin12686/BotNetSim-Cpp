@@ -2,6 +2,7 @@
 #include <vector>
 #include <set>
 #include <sstream>
+#include <fstream>
 #include <algorithm>
 #include <chrono>
 #include <stdlib.h>
@@ -14,6 +15,8 @@
 #define IDLE 5000
 // Max Sensor Per Message
 #define SensorPerMsg 50
+#define doc_name "Record.csv"
+#define record_rate 1000
 
 using namespace std;
 
@@ -32,6 +35,9 @@ struct HOSTPtrComp {
         return lhs->ip + lhs->port < rhs->ip + rhs->port;
     }
 };
+
+// Record The History
+DWORD WINAPI record(LPVOID);
 
 // Virtual Timer Thread
 DWORD WINAPI virtual_time(LPVOID);
@@ -67,6 +73,7 @@ int handle_msg(_socket *, string);
 int infection(bool *);
 
 // Setting
+bool show_debug_msg = false;
 // Growing rate(minutes-VT)
 int GROWRATE = 60;
 // Growing Number
@@ -100,6 +107,7 @@ int main() {
     start_time = chrono::steady_clock::now();
     v_t.setUpdateRate(TSD);
     MyThread timer;
+    MyThread record_t;
     MyThread server;
     MyThread time_broadcast;
     MyThread spreading;
@@ -130,6 +138,19 @@ int main() {
         return 1;
     }
 
+    record_t.handle = CreateThread(NULL, 0, record, (LPVOID) &console_on, 0, &(record_t.id));
+    if (!record_t.handle) {
+        printf("[Error] Record Thread Unable To Start.\n");
+        console_on = false;
+        v_t.stop();
+        WaitForSingleObject(timer.handle, INFINITE);
+        CloseHandle(timer.handle);
+        CloseHandle(action_lock);
+        CloseHandle(data_lock);
+        return 1;
+    }
+
+
     // socket server
     WSADATA wsadata;
     if (!_socket::wsastartup_(&wsadata)) {
@@ -138,6 +159,8 @@ int main() {
         v_t.stop();
         WaitForSingleObject(timer.handle, INFINITE);
         CloseHandle(timer.handle);
+        WaitForSingleObject(record_t.handle, INFINITE);
+        CloseHandle(record_t.handle);
         CloseHandle(action_lock);
         CloseHandle(data_lock);
         return 1;
@@ -150,6 +173,8 @@ int main() {
         v_t.stop();
         WaitForSingleObject(timer.handle, INFINITE);
         CloseHandle(timer.handle);
+        WaitForSingleObject(record_t.handle, INFINITE);
+        CloseHandle(record_t.handle);
         CloseHandle(action_lock);
         CloseHandle(data_lock);
         return 1;
@@ -162,6 +187,8 @@ int main() {
         console_on = false;
         WaitForSingleObject(server.handle, INFINITE);
         CloseHandle(server.handle);
+        WaitForSingleObject(record_t.handle, INFINITE);
+        CloseHandle(record_t.handle);
         v_t.stop();
         WaitForSingleObject(timer.handle, INFINITE);
         CloseHandle(timer.handle);
@@ -177,6 +204,8 @@ int main() {
         console_on = false;
         WaitForSingleObject(server.handle, INFINITE);
         CloseHandle(server.handle);
+        WaitForSingleObject(record_t.handle, INFINITE);
+        CloseHandle(record_t.handle);
         WaitForSingleObject(time_broadcast.handle, INFINITE);
         CloseHandle(time_broadcast.handle);
         v_t.stop();
@@ -201,6 +230,7 @@ int main() {
     printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
     printf("add_crawler : Add Crawler\nsend_time: Toggle Time Sending\n");
     printf("change_bot_num : Show change_bot Number\nset_change_bot_num: Set change_bot Number\n");
+    printf("debug : Show debug message\n");
     string UserCommand = "";
     while (UserCommand != "quit") {
         cin >> UserCommand;
@@ -294,6 +324,13 @@ int main() {
             printf("Number: %d\n", GROWNUM);
         } else if (UserCommand == "clear") {
             system("CLS");
+        } else if (UserCommand == "debug") {
+            if (show_debug_msg) {
+                show_debug_msg = false;
+            } else {
+                show_debug_msg = true;
+            }
+            printf("debug: %s\n", show_debug_msg ? "True" : "False");
         } else {
             printf("quit : Stop the Application\ntime_rate : Get Current Time Rate\n");
             printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
@@ -304,6 +341,7 @@ int main() {
             printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
             printf("add_crawler : Add Crawler\nsend_time: Toggle Time Sending\n");
             printf("change_bot_num : Show change_bot Number\nset_change_bot_num: Set change_bot Number\n");
+            printf("debug : Show debug message\n");
         }
     }
 
@@ -360,6 +398,22 @@ int main() {
     bot_ndelay_list.clear();
 }
 
+DWORD WINAPI record(LPVOID console_on) {
+    printf("[INFO] Record Thread Started.\n");
+    bool *console = (bool *) console_on;
+    ofstream record;
+    record.open(doc_name);
+    record << "timestamp, host number, bot number, senser number, crawler number, getcha number" << endl;
+    while (*console) {
+        record << v_t.timestamp() << ", " << host_set.size() << ", " << bot_set.size() << ", " << sensor_set.size()
+               << ", " << crawler_set.size() << ", " << getcha_set.size() << endl;
+        Sleep(record_rate);
+    }
+    record.close();
+    printf("[INFO] Record Thread Stop.\n");
+    return 1;
+}
+
 DWORD WINAPI virtual_time(LPVOID null) {
     printf("[INFO] Timer Thread Started.\n");
     v_t.run();
@@ -380,7 +434,9 @@ DWORD WINAPI server_accept(LPVOID console) {
                     MyThread *temp = new MyThread;
                     temp->handle = CreateThread(NULL, 0, handle_client, (LPVOID) client, 0, &(temp->id));
                     if (temp->handle) {
-                        printf("[INFO] Client Accepted.\n");
+                        if (show_debug_msg) {
+                            printf("[INFO] Client Accepted.\n");
+                        }
                         t_v.push_back(temp);
                     }
                 }
@@ -414,7 +470,9 @@ DWORD WINAPI handle_client(LPVOID s) {
         if (client->check_recv_(IDLE)) {
             msg_ptr = client->recv_();
             if (msg_ptr) {
-                printf("MSG: %s\n", msg_ptr);
+                if (show_debug_msg) {
+                    printf("MSG: %s\n", msg_ptr);
+                }
                 if (handle_msg(client, msg_ptr) != 0) {
                     recv_loop = false;
                 }
@@ -482,24 +540,38 @@ DWORD WINAPI bot_spreading(LPVOID console) {
             if (time_pass >= GROWRATE * 60000 && host_set.size() > GROWT && host_set.size() > GROWNUM) {
                 temp = time_pass / GROWRATE / 60000;
                 time_pass %= GROWRATE * 60000;
+                // Do it one time
+                temp = 1;
                 for (int i = 0; i < temp && *console_on; i++) {
-                    printf("[INFO] Spreading Wait Lock.\n");
+                    if (show_debug_msg) {
+                        printf("[INFO] Spreading Wait Lock.\n");
+                    }
                     WaitForSingleObject(action_lock, INFINITE);
-                    printf("[INFO] Spreading Get Lock.\n");
+                    if (show_debug_msg) {
+                        printf("[INFO] Spreading Get Lock.\n");
+                    }
                     infection(console_on);
                     ReleaseMutex(action_lock);
-                    printf("[INFO] Spreading Release Lock.\n");
+                    if (show_debug_msg) {
+                        printf("[INFO] Spreading Release Lock.\n");
+                    }
                 }
             }
         } else if (host_set.size() > GROWT) {
-            printf("[INFO] Starting Inflection.\n");
             letgo = true;
-            printf("[INFO] Spreading Wait Lock.\n");
+            if (show_debug_msg) {
+                printf("[INFO] Spreading Wait Lock.\n");
+            }
             WaitForSingleObject(action_lock, INFINITE);
-            printf("[INFO] Spreading Get Lock.\n");
+            if (show_debug_msg) {
+                printf("[INFO] Spreading Get Lock.\n");
+            }
+            printf("[INFO] Starting Inflection.\n");
             infection(console_on);
             ReleaseMutex(action_lock);
-            printf("[INFO] Spreading Release Lock.\n");
+            if (show_debug_msg) {
+                printf("[INFO] Spreading Release Lock.\n");
+            }
         }
         Sleep(TSD);
     }
@@ -521,7 +593,9 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
         if ((client_i)->check_recv_(IDLE)) {
             msg_ptr = (client_i)->recv_();
             if (msg_ptr) {
-                printf("MSG: %s\n", msg_ptr);
+                if (show_debug_msg) {
+                    printf("MSG: %s\n", msg_ptr);
+                }
                 int token_id = handle_msg(client_i, msg_ptr, target_i);
                 if (token_id != 0) {
                     recv_loop = false;
@@ -584,9 +658,14 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
 }
 
 DWORD WINAPI change_sensor(LPVOID console_on) {
-    printf("[INFO] Change Sensor Wait Lock.\n");
+    if (show_debug_msg) {
+        printf("[INFO] Change Sensor Wait Lock.\n");
+    }
     WaitForSingleObject(action_lock, INFINITE);
-    printf("[INFO] Change Sensor Get Lock.\n");
+    if (show_debug_msg) {
+        printf("[INFO] Change Sensor Get Lock.\n");
+    }
+    printf("[INFO] Change Sensor Start.\n");
     pair<bool *, int> *p = (pair<bool *, int> *) console_on;
     bool *console = p->first;
     int num = p->second;
@@ -615,15 +694,22 @@ DWORD WINAPI change_sensor(LPVOID console_on) {
         client.close_();
     }
     ReleaseMutex(action_lock);
-    printf("[INFO] Change Sensor Release Lock.\n");
+    if (show_debug_msg) {
+        printf("[INFO] Change Sensor Release Lock.\n");
+    }
     delete p;
     return 1;
 }
 
 DWORD WINAPI change_crawler(LPVOID console_on) {
-    printf("[INFO] Change Crawler Wait Lock.\n");
+    if (show_debug_msg) {
+        printf("[INFO] Change Crawler Wait Lock.\n");
+    }
     WaitForSingleObject(action_lock, INFINITE);
-    printf("[INFO] Change Crawler Get Lock.\n");
+    if (show_debug_msg) {
+        printf("[INFO] Change Crawler Get Lock.\n");
+    }
+    printf("[INFO] Change Crawler Start.\n");
     pair<bool *, int> *p = (pair<bool *, int> *) console_on;
     bool *console = p->first;
     int num = p->second;
@@ -647,7 +733,9 @@ DWORD WINAPI change_crawler(LPVOID console_on) {
                     if (client.check_recv_(IDLE)) {
                         msg_ptr = client.recv_();
                         if (msg_ptr) {
-                            printf("MSG: %s\n", msg_ptr);
+                            if (show_debug_msg) {
+                                printf("MSG: %s\n", msg_ptr);
+                            }
                             int token_id = handle_msg(&client, msg_ptr, target);
                             if (token_id == 3) {
                                 recv_loop = false;
@@ -674,7 +762,9 @@ DWORD WINAPI change_crawler(LPVOID console_on) {
         client.close_();
     }
     ReleaseMutex(action_lock);
-    printf("[INFO] Change Crawler Release Lock.\n");
+    if (show_debug_msg) {
+        printf("[INFO] Change Crawler Release Lock.\n");
+    }
     delete p;
     return 1;
 }
@@ -741,7 +831,9 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                             output += ":" + host->ip + ":" + host->port;
                         }
                         random_list.clear();
-                        printf("[INFO] Sending PeerList...(%s)\n", output.c_str());
+                        if (show_debug_msg) {
+                            printf("[INFO] Sending PeerList...(%s)\n", output.c_str());
+                        }
                         if (client->send_((char *) output.c_str()) == -1) {
                             printf("[Warning] Host %s:%s Sending PeerList Failed.\n", (this_host->ip).c_str(),
                                    (this_host->port).c_str());
@@ -761,7 +853,9 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                             output += ":" + host->ip + ":" + host->port;
                         }
                         random_list.clear();
-                        printf("[INFO] Sending SensorList...(%s)\n", output.c_str());
+                        if (show_debug_msg) {
+                            printf("[INFO] Sending SensorList...(%s)\n", output.c_str());
+                        }
                         if (client->send_((char *) output.c_str()) == -1) {
                             printf("[Warning] Sending SensorList Failed.\n");
                         }
