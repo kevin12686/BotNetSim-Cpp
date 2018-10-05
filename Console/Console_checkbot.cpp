@@ -234,6 +234,8 @@ int main() {
     printf("quit : Stop the Application\ntime_rate : Get Current Time Rate\n");
     printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
     printf("list_bot : List Bot\nlist_ctrl : List Controler\n");
+    printf("list_servent_bot : List Servent_Bot\nlist_sleep_bot : List Sleep_Bot\n");
+    printf("list_check_bot : List Check_Bot\n");
     printf("list_crawler : List Crawler\nlist_sensor : List Sensor\n");
     printf("list_getcha : List Getcha\nglobal : Global Status\n");
     printf("timestamp : Current Timestamp\nset_time_rate : Set Time Rate\n");
@@ -361,6 +363,8 @@ int main() {
             printf("quit : Stop the Application\ntime_rate : Get Current Time Rate\n");
             printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
             printf("list_bot : List Bot\nlist_ctrl : List Controler\n");
+            printf("list_servent_bot : List Servent_Bot\nlist_sleep_bot : List Sleep_Bot\n");
+            printf("list_check_bot : List Check_Bot\n");
             printf("list_crawler : List Crawler\nlist_sensor : List Sensor\n");
             printf("list_getcha : List Getcha\nglobal : Global Status\n");
             printf("timestamp : Current Timestamp\nset_time_rate : Set Time Rate\n");
