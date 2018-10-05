@@ -848,8 +848,10 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 arr = split(msg_data, ':');
                 for (auto i:servent_bot_set) {
                     if (i->ip == arr.at(0) && i->port == arr.at(1)) {
+                        WaitForSingleObject(data_lock, INFINITE);
                         check_bot_set.insert(i);
                         servent_bot_set.erase(servent_bot_set.find(i));
+                        ReleaseMutex(data_lock);
                         break;
                     }
                 }
@@ -871,8 +873,10 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     } else {
                         for (auto i:servent_bot_set) {
                             if (i->ip == arr.at(0) && i->port == arr.at(1)) {
+                                WaitForSingleObject(data_lock, INFINITE);
                                 sleep_bot_set.insert(i);
                                 servent_bot_set.erase(servent_bot_set.find(i));
+                                ReleaseMutex(data_lock);
                                 break;
                             }
                         }
