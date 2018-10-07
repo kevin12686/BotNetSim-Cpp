@@ -100,7 +100,7 @@ int main() {
         sprintf(p, "%d", temp);
         sprintf(ip_port, "%s %s %s %s %s", host_ip, p, console_ip, console_port, debug);
 
-        char dir[] = "Main.exe";
+        char dir[] = "P2PBot.exe";
         // 跳新視窗 CREATE_NEW_CONSOLE
         // 一般設 0
         BOOL child;
