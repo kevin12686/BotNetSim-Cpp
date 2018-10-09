@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
     _socket::wsastartup_(&wsadata);
 
     server_status = true;
-
+/*
     _socket socket2Console(CONSOLE_IP_ADDRESS, (char *) "6666", 1024);
     char msg[30] = "CTRL";
     strcat(msg, (const char *) LOCAL_IP_ADDRESS);
@@ -110,7 +110,7 @@ int main(int argc, char *argv[]) {
         exit(-1);
     }
     socket2Console.close_();
-
+*/
 
     listenSocket = new _socketserver((char *) "1999", 1024);
 
@@ -227,9 +227,9 @@ void messageHandle(LPVOID s) {
     if (msg_type == 'T') {
 
         // get virtual time from console
-        char *datetime = new char[17]{0};
-        strncpy(datetime, &message[1], 14);
-        strncpy(datetime, (char *) calculate_time(datetime).str().c_str(), 16);
+        char *datetime = new char[23]{0};
+        strncpy(datetime, &message[1], strlen(message));
+        strncpy(datetime, (char *) calculate_time(datetime).str().c_str(), strlen(message)+1);
 
         const size_t len = strlen(datetime) + 1;
         HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, len);
@@ -298,12 +298,15 @@ ostringstream calculate_time(char *arg_time) {
     char hour[3] = {0};
     char min[3] = {0};
     char sec[3] = {0};
+    char rate[5] = {0};
     memcpy(year, &arg_time[0], 4);
     memcpy(month, &arg_time[4], 2);
     memcpy(day, &arg_time[6], 2);
     memcpy(hour, &arg_time[8], 2);
     memcpy(min, &arg_time[10], 2);
     memcpy(sec, &arg_time[12], 2);
+    strcpy(rate, &arg_time[14]);
+    cout << rate << endl;
     int datetime[6] = {std::atoi(year), std::atoi(month), std::atoi(day), std::atoi(hour), std::atoi(min),
                        std::atoi(sec)};
 
@@ -360,7 +363,7 @@ ostringstream calculate_time(char *arg_time) {
 
     timezone_datetime << "T:" << year << setfill('0') << setw(2) << month << setfill('0') << setw(2) << day
                       << setfill('0')
-                      << setw(2) << hour << setfill('0') << setw(2) << min << setfill('0') << setw(2) << sec;
+                      << setw(2) << hour << setfill('0') << setw(2) << min << setfill('0') << setw(2) << sec << rate;
 
     return timezone_datetime;
 

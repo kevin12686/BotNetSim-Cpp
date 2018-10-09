@@ -14,7 +14,7 @@ int main() {
     _socket::wsastartup_(&wsadata);
 
     _socket f((char *) "127.0.0.1", (char *) "1999", 1024);
-    f.send_((char *) "S8000");
+    f.send_((char *) "T20180101010101:3445");
     cout << f.recv_() << endl;
     f.shutdown_(_socket::BOTH);
     f.close_();
