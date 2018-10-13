@@ -7,11 +7,11 @@ class Timer {
 public:
     bool Debug = false;
 
-    Timer(float);
+    Timer(int);
 
     Timer(int *, float);
 
-    Timer(int, int, int, int, int, int, float);
+    Timer(int, int, int, int, int, int, int);
 
     int *getDateTime();
 
@@ -41,7 +41,7 @@ public:
 
     void setSecond(int);
 
-    float getRate();
+    int getRate();
 
     void setRate(float);
 
@@ -70,7 +70,7 @@ private:
     int TimePass = 0;
     // UpdateRate (mini second)
     short UpdateRate = 100;
-    float Rate;
+    int Rate;
     bool Run;
 };
 

@@ -502,7 +502,7 @@ DWORD WINAPI virtual_broadcast(LPVOID console) {
             for (it_i = controler_set.begin(); it_i != controler_set.end() && *console_on; it_i++) {
                 _socket client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(), BUFSIZE);
                 if (client.get_status()) {
-                    string time_msg = "T" + v_t.timestamp();
+                    string time_msg = "T" + v_t.timestamp() + ":" + to_string(v_t.getRate());
                     if (client.send_((char *) time_msg.c_str()) == -1) {
                         printf("[Warning] Controler %s:%s Time Broadcast Failed.\n", ((*it_i)->ip).c_str(),
                                ((*it_i)->port).c_str());

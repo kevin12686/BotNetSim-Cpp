@@ -12,7 +12,7 @@
 #define PORT "6666"
 #define BUFSIZE 1024
 // Mini Seconds
-#define IDLE 5000
+#define IDLE 2000
 // Max Sensor Per Message
 #define SensorPerMsg 50
 #define ServentPerClient 5
@@ -85,13 +85,15 @@ bool show_debug_msg = false;
 // Growing rate(minutes-VT)
 int GROWRATE = 60;
 // Growing Number
-int GROWNUM = 20;
+int GROWNUM = 10;
 // Start Growing Threshold
-int GROWT = 25;
+int GROWT = 10;
 // Initial PeerList Size
 int PLSIZE = 3;
 // Sending Virtual Time
 bool time_flag = true;
+// Spreading Bot
+bool spreading_flag = false;
 // Time Spreading Delay(mini seconds-RT)
 short TSD = 500;
 // MsgType Define
@@ -242,13 +244,13 @@ int main() {
     printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
     printf("add_crawler : Add Crawler\nsend_time: Toggle Time Sending\n");
     printf("change_bot_num : Show change_bot Number\nset_change_bot_num: Set change_bot Number\n");
-    printf("debug : Show debug message\n");
+    printf("debug : Show debug message\nspreading: Toggle Spreading\n");
     string UserCommand = "";
     while (UserCommand != "quit") {
         cin >> UserCommand;
         transform(UserCommand.begin(), UserCommand.end(), UserCommand.begin(), ::tolower);
         if (UserCommand == "time_rate") {
-            printf("Current Rate: %f\n", v_t.getRate());
+            printf("Current Rate: %d\n", v_t.getRate());
         } else if (UserCommand == "update_rate") {
             printf("Current Rate: %d\n", TSD);
         } else if (UserCommand == "list_host") {
@@ -305,8 +307,8 @@ int main() {
             printf("timestamp: %s\n", v_t.timestamp().c_str());
         } else if (UserCommand == "set_time_rate") {
             printf("Time Rate: ");
-            float rate;
-            scanf("%f", &rate);
+            int rate;
+            scanf("%d", &rate);
             v_t.setRate(rate);
         } else if (UserCommand == "set_update_rate") {
             printf("Update Rate: ");
@@ -344,6 +346,13 @@ int main() {
                 time_flag = true;
             }
             printf("send_time: %s\n", time_flag ? "True" : "False");
+        } else if (UserCommand == "spreading") {
+            if (spreading_flag) {
+                spreading_flag = false;
+            } else {
+                spreading_flag = true;
+            }
+            printf("spreading_flag: %s\n", spreading_flag ? "True" : "False");
         } else if (UserCommand == "set_change_bot_num") {
             printf("Number: ");
             scanf("%d", &GROWNUM);
@@ -371,7 +380,7 @@ int main() {
             printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
             printf("add_crawler : Add Crawler\nsend_time: Toggle Time Sending\n");
             printf("change_bot_num : Show change_bot Number\nset_change_bot_num: Set change_bot Number\n");
-            printf("debug : Show debug message\n");
+            printf("debug : Show debug message\nspreading: Toggle Spreading\n");
         }
     }
 
@@ -433,9 +442,13 @@ DWORD WINAPI record(LPVOID console_on) {
     bool *console = (bool *) console_on;
     ofstream record;
     record.open(doc_name);
-    record << "timestamp, host number, bot number, senser number, crawler number, getcha number" << endl;
+    record
+            << "timestamp, host number, bot number, servent number, client number, sleep number, check number, senser number, crawler number, getcha number"
+            << endl;
     while (*console) {
-        record << v_t.timestamp() << ", " << host_set.size() << ", " << bot_set.size() << ", " << sensor_set.size()
+        record << v_t.timestamp() << ", " << host_set.size() << ", " << bot_set.size() << ", " << servent_bot_set.size()
+               << ", " << bot_set.size() - servent_bot_set.size() - sleep_bot_set.size() << ", " << sleep_bot_set.size()
+               << ", " << check_bot_set.size() << ", " << sensor_set.size()
                << ", " << crawler_set.size() << ", " << getcha_set.size() << endl;
         Sleep(record_rate);
     }
@@ -490,7 +503,9 @@ DWORD WINAPI server_accept(LPVOID console) {
 }
 
 DWORD WINAPI handle_client(LPVOID s) {
-    printf("[INFO] Client Thread Started.\n");
+    if (show_debug_msg) {
+        printf("[INFO] Client Thread Started.\n");
+    }
     _socket *client = (_socket *) s;
     bool recv_loop = true;
 
@@ -519,7 +534,9 @@ DWORD WINAPI handle_client(LPVOID s) {
     client->shutdown_(_socket::BOTH);
     client->close_();
     delete client;
-    printf("[INFO] Client Thread Stop.\n");
+    if (show_debug_msg) {
+        printf("[INFO] Client Thread Stop.\n");
+    }
     return 1;
 }
 
@@ -532,7 +549,7 @@ DWORD WINAPI virtual_broadcast(LPVOID console) {
             for (it_i = controler_set.begin(); it_i != controler_set.end() && *console_on; it_i++) {
                 _socket client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(), BUFSIZE);
                 if (client.get_status()) {
-                    string time_msg = "T" + v_t.timestamp();
+                    string time_msg = "T" + v_t.timestamp() + ":" + to_string(v_t.getRate());
                     if (client.send_((char *) time_msg.c_str()) == -1) {
                         printf("[Warning] Controler %s:%s Time Broadcast Failed.\n", ((*it_i)->ip).c_str(),
                                ((*it_i)->port).c_str());
@@ -565,7 +582,7 @@ DWORD WINAPI bot_spreading(LPVOID console) {
     int time_pass = 0;
     int temp = 0;
     while (*console_on) {
-        if (letgo) {
+        if (letgo && spreading_flag) {
             time_pass += (int) (TSD * v_t.getRate());
             if (time_pass >= GROWRATE * 60000 && host_set.size() > GROWT && host_set.size() > GROWNUM) {
                 temp = time_pass / GROWRATE / 60000;
@@ -587,7 +604,7 @@ DWORD WINAPI bot_spreading(LPVOID console) {
                     }
                 }
             }
-        } else if (host_set.size() > GROWT) {
+        } else if (host_set.size() > GROWT && spreading_flag) {
             letgo = true;
             if (show_debug_msg) {
                 printf("[INFO] Spreading Wait Lock.\n");
@@ -637,10 +654,10 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
                         it_i = servent_bot_set.find(target_i);
                         if (it_i == servent_bot_set.end()) {
                             if (*it_i == target_i) {
-                                bot_set.erase(it_i);
+                                servent_bot_set.erase(it_i);
                             }
                         } else {
-                            bot_set.erase(it_i);
+                            servent_bot_set.erase(it_i);
                         }
                         ReleaseMutex(data_lock);
                     }
@@ -671,10 +688,10 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
             it_i = servent_bot_set.find(target_i);
             if (it_i == servent_bot_set.end()) {
                 if (*it_i == target_i) {
-                    bot_set.erase(it_i);
+                    servent_bot_set.erase(it_i);
                 }
             } else {
-                bot_set.erase(it_i);
+                servent_bot_set.erase(it_i);
             }
             ReleaseMutex(data_lock);
         }
@@ -812,7 +829,7 @@ vector<string> split(const string &str, char delimiter) {
 // Random Delay Bot
 int delay_choose() {
     int random = rand() % 100;
-    return random < 50 ? 0 : 1;
+    return random < 10 ? 0 : 1;
 }
 
 // Check Bot & Sleep Bot Selection
@@ -890,7 +907,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 if (true) {
                     set<HOST *, HOSTPtrComp> random_list;
                     if (this_host && msg_data == "Peerlist") {
-                        set<HOST *, HOSTPtrComp> my_list(bot_set.begin(), bot_set.end());
+                        set<HOST *, HOSTPtrComp> my_list(servent_bot_set.begin(), servent_bot_set.end());
                         set<HOST *, HOSTPtrComp>::iterator it_find = my_list.find(this_host);
                         if (it_find != my_list.end() && it_find != my_list.end()) {
                             my_list.erase(my_list.find(this_host));
@@ -938,7 +955,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         }
                     } else if (msg_data == "Serventlist") {
                         set<HOST *, HOSTPtrComp>::iterator servent_i;
-                        output = "ServentList";
+                        output = "Serventlist";
                         while (random_list.size() < (servent_bot_set.size() > ServentPerClient ? ServentPerClient
                                                                                                : servent_bot_set.size())) {
                             random_num = rand() % servent_bot_set.size();
@@ -1021,13 +1038,14 @@ int servent_infection(bool *console) {
     HOST *target = NULL;
     string send_data, recv_data;
     if (host_set.size() > GROWT && host_set.size() > GROWNUM) {
-        printf("[INFO] Servent Infecting...\n");
+        printf("[INFO] Infecting...\n");
         for (int i = 0; i < GROWNUM && *console;) {
             random_num = rand() % host_set.size();
             host_i = host_set.begin();
             advance(host_i, random_num);
             target = *host_i;
-            if (delay_choose() == 0) {
+            delay = delay_choose();
+            if (delay == 0) {
                 send_data = "Change:ServentBot";
             } else {
                 send_data = "Change:ClientBot";

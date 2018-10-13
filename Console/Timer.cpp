@@ -2,7 +2,7 @@
 #include <windows.h>
 #include "Timer.h"
 
-Timer::Timer(float rate) {
+Timer::Timer(int rate) {
     this->setDateTime(this->Default_Datetime);
     this->setRate(rate);
     this->Run = false;
@@ -14,7 +14,7 @@ Timer::Timer(int *datetime, float rate) {
     this->Run = false;
 }
 
-Timer::Timer(int year, int month, int day, int hour, int minute, int second, float rate) {
+Timer::Timer(int year, int month, int day, int hour, int minute, int second, int rate) {
     int datetime[6] = {year, month, day, hour, minute, second};
     this->setDateTime(datetime);
     this->setRate(rate);
@@ -78,7 +78,7 @@ void Timer::setSecond(int second) {
     (this->DateTime[5]) = second;
 }
 
-float Timer::getRate() {
+int Timer::getRate() {
     return this->Rate;
 }
 
