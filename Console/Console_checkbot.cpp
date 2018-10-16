@@ -12,7 +12,7 @@
 #define PORT "6666"
 #define BUFSIZE 1024
 // Mini Seconds
-#define IDLE 2000
+#define IDLE 1000
 // Max Sensor Per Message
 #define SensorPerMsg 50
 #define ServentPerClient 5
@@ -503,6 +503,7 @@ DWORD WINAPI server_accept(LPVOID console) {
 }
 
 DWORD WINAPI handle_client(LPVOID s) {
+    srand(unsigned(chrono::duration_cast<chrono::nanoseconds>(start_time - chrono::steady_clock::now()).count()));
     if (show_debug_msg) {
         printf("[INFO] Client Thread Started.\n");
     }
@@ -719,7 +720,7 @@ DWORD WINAPI change_sensor(LPVOID console_on) {
     int i, random;
     set<HOST *, HOSTPtrComp>::iterator host_i;
     for (i = 0; i < num && *console; i++) {
-        random = rand() % host_set.size();
+        random = (rand() * rand()) % host_set.size();
         host_i = host_set.begin();
         advance(host_i, random);
         HOST *target = *host_i;
@@ -763,7 +764,7 @@ DWORD WINAPI change_crawler(LPVOID console_on) {
     int i, random;
     set<HOST *, HOSTPtrComp>::iterator host_i;
     for (i = 0; i < num && *console; i++) {
-        random = rand() % host_set.size();
+        random = (rand() * rand()) % host_set.size();
         host_i = host_set.begin();
         advance(host_i, random);
         HOST *target = *host_i;
@@ -915,7 +916,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         set<HOST *, HOSTPtrComp>::iterator bot_i;
                         output = "Peerlist";
                         while (random_list.size() < PLSIZE) {
-                            random_num = rand() % my_list.size();
+                            random_num = (rand() * rand()) % my_list.size();
                             bot_i = my_list.begin();
                             advance(bot_i, random_num);
                             random_list.insert(*bot_i);
@@ -937,7 +938,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         output = "Sensorlist";
                         while (random_list.size() < (sensor_set.size() > SensorPerMsg ? SensorPerMsg
                                                                                       : sensor_set.size())) {
-                            random_num = rand() % sensor_set.size();
+                            random_num = (rand() * rand()) % sensor_set.size();
                             sensor_i = sensor_set.begin();
                             advance(sensor_i, random_num);
                             random_list.insert(*sensor_i);
@@ -958,7 +959,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         output = "Serventlist";
                         while (random_list.size() < (servent_bot_set.size() > ServentPerClient ? ServentPerClient
                                                                                                : servent_bot_set.size())) {
-                            random_num = rand() % servent_bot_set.size();
+                            random_num = (rand() * rand()) % servent_bot_set.size();
                             servent_i = servent_bot_set.begin();
                             advance(servent_i, random_num);
                             random_list.insert(*servent_i);
@@ -1040,7 +1041,7 @@ int servent_infection(bool *console) {
     if (host_set.size() > GROWT && host_set.size() > GROWNUM) {
         printf("[INFO] Infecting...\n");
         for (int i = 0; i < GROWNUM && *console;) {
-            random_num = rand() % host_set.size();
+            random_num = (rand() * rand()) % host_set.size();
             host_i = host_set.begin();
             advance(host_i, random_num);
             target = *host_i;
@@ -1067,6 +1068,7 @@ int servent_infection(bool *console) {
                     i++;
                 }
             } else {
+                printf("[Warning] HOST %s:%s Change Bot Failed.\n", (target->ip).c_str(), (target->port).c_str());
                 delete client;
             }
         }
@@ -1104,7 +1106,7 @@ int servent_first_infection(bool *console) {
     if (host_set.size() > GROWT && host_set.size() > GROWNUM) {
         printf("[INFO] Servent Infecting...\n");
         for (int i = 0; i < GROWNUM && *console;) {
-            random_num = rand() % host_set.size();
+            random_num = (rand() * rand()) % host_set.size();
             host_i = host_set.begin();
             advance(host_i, random_num);
             target = *host_i;
@@ -1124,6 +1126,7 @@ int servent_first_infection(bool *console) {
                     i++;
                 }
             } else {
+                printf("[Warning] HOST %s:%s Change Bot Failed.\n", (target->ip).c_str(), (target->port).c_str());
                 delete client;
             }
         }
