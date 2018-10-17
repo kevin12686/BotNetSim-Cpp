@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <stdlib.h>
+#include <pthread.h>
 #include "_socketserver.h"
 #include "Timer.h"
 
@@ -24,11 +25,6 @@
 
 using namespace std;
 
-typedef struct MYTHREAD {
-    HANDLE handle;
-    DWORD id;
-} MyThread;
-
 typedef struct MYTHOST {
     string ip;
     string port;
@@ -41,28 +37,28 @@ struct HOSTPtrComp {
 };
 
 // Record The History
-DWORD WINAPI record(LPVOID);
+void *record(LPVOID);
 
 // Virtual Timer Thread
-DWORD WINAPI virtual_time(LPVOID);
+void *virtual_time(LPVOID);
 
 // Server Accept Connection Thread
-DWORD WINAPI server_accept(LPVOID);
+void *server_accept(LPVOID);
 
 // Handle The Socket Which Accepted By Server
-DWORD WINAPI handle_client(LPVOID);
+void *handle_client(LPVOID);
 
 // Sending Virtual Time To Controler
-DWORD WINAPI virtual_broadcast(LPVOID);
+void *virtual_broadcast(LPVOID);
 
 // Spreading Bot
-DWORD WINAPI bot_spreading(LPVOID);
+void *bot_spreading(LPVOID);
 
-DWORD WINAPI handle_bot_spreading(LPVOID);
+void *handle_bot_spreading(LPVOID);
 
-DWORD WINAPI change_sensor(LPVOID);
+void *change_sensor(LPVOID);
 
-DWORD WINAPI change_crawler(LPVOID);
+void *change_crawler(LPVOID);
 
 vector<string> split(const string &, char);
 
@@ -103,7 +99,8 @@ string msg_token[] = {"ChangeCheckBot", "Promotion", "Request", "HOST", "CTRL", 
 // init
 Timer v_t(100.0);
 chrono::steady_clock::time_point start_time;
-HANDLE action_lock, data_lock;
+//HANDLE action_lock, data_lock;
+pthread_mutex_t action_lock = PTHREAD_MUTEX_INITIALIZER, data_lock = PTHREAD_MUTEX_INITIALIZER;
 set<HOST *, HOSTPtrComp> host_set;
 set<HOST *, HOSTPtrComp> bot_set;
 set<HOST *, HOSTPtrComp> servent_bot_set;
@@ -118,6 +115,8 @@ int main() {
     // init
     start_time = chrono::steady_clock::now();
     v_t.setUpdateRate(TSD);
+
+    /*
     MyThread timer;
     MyThread record_t;
     MyThread server;
@@ -125,6 +124,12 @@ int main() {
     MyThread spreading;
     vector<HANDLE> thread_handle;
     vector<DWORD> thread_id;
+    */
+
+    int result = 0;
+    pthread_t timer, record_t, server, time_broadcast, spreading;
+    vector<pthread_t> thread_handle;
+
     action_lock = CreateMutex(NULL, false, NULL);
     if (action_lock == NULL) {
         printf("[ERROR] CreateMutex Error. ErrorCode=%d", GetLastError());
@@ -133,7 +138,7 @@ int main() {
     data_lock = CreateMutex(NULL, false, NULL);
     if (data_lock == NULL) {
         printf("[ERROR] CreateMutex Error. ErrorCode=%d", GetLastError());
-        CloseHandle(action_lock);
+
         return 1;
     }
 
@@ -141,24 +146,25 @@ int main() {
     bool console_on = true;
 
     // timer start
-    timer.handle = CreateThread(NULL, 0, virtual_time, NULL, 0, &(timer.id));
-    if (!timer.handle) {
+    result = pthread_create(&timer, NULL, virtual_time, NULL);
+    if (result) {
         printf("[Error] Timer Thread Unable To Start.\n");
         console_on = false;
-        CloseHandle(action_lock);
-        CloseHandle(data_lock);
+
+
         return 1;
     }
 
-    record_t.handle = CreateThread(NULL, 0, record, (LPVOID) &console_on, 0, &(record_t.id));
-    if (!record_t.handle) {
+    result = pthread_create(&record_t, NULL, record, (LPVOID) &console_on);
+    if (result) {
         printf("[Error] Record Thread Unable To Start.\n");
         console_on = false;
         v_t.stop();
-        WaitForSingleObject(timer.handle, INFINITE);
-        CloseHandle(timer.handle);
-        CloseHandle(action_lock);
-        CloseHandle(data_lock);
+        pthread_join(timer, NULL);
+        //WaitForSingleObject(timer.handle, INFINITE);
+        //CloseHandle(timer.handle);
+
+
         return 1;
     }
 
@@ -169,62 +175,73 @@ int main() {
         printf("[Error] WSAStartup Failed.\n");
         console_on = false;
         v_t.stop();
-        WaitForSingleObject(timer.handle, INFINITE);
-        CloseHandle(timer.handle);
-        WaitForSingleObject(record_t.handle, INFINITE);
-        CloseHandle(record_t.handle);
-        CloseHandle(action_lock);
-        CloseHandle(data_lock);
+        pthread_join(timer, NULL);
+        //WaitForSingleObject(timer.handle, INFINITE);
+        //CloseHandle(timer.handle);
+        pthread_join(record_t, NULL);
+        //WaitForSingleObject(record_t.handle, INFINITE);
+        //CloseHandle(record_t.handle);
+
+
         return 1;
     }
-    server.handle = CreateThread(NULL, 0, server_accept, (LPVOID) &console_on, 0, &(server.id));
-    if (!server.handle) {
+    result = pthread_create(&server, NULL, server_accept, (LPVOID) &console_on);
+    if (result) {
         printf("[Error] Socket Server Thread Unable To Start.\n");
         console_on = false;
         _socket::wsacleanup_();
         v_t.stop();
-        WaitForSingleObject(timer.handle, INFINITE);
-        CloseHandle(timer.handle);
-        WaitForSingleObject(record_t.handle, INFINITE);
-        CloseHandle(record_t.handle);
-        CloseHandle(action_lock);
-        CloseHandle(data_lock);
+        pthread_join(timer, NULL);
+        //WaitForSingleObject(timer.handle, INFINITE);
+        //CloseHandle(timer.handle);
+        pthread_join(record_t, NULL);
+        //WaitForSingleObject(record_t.handle, INFINITE);
+        //CloseHandle(record_t.handle);
+
+
         return 1;
     }
 
     // virtual_broadcast
-    time_broadcast.handle = CreateThread(NULL, 0, virtual_broadcast, (LPVOID) &console_on, 0, &(time_broadcast.id));
-    if (!time_broadcast.handle) {
+    result = pthread_create(&time_broadcast, NULL, virtual_broadcast, (LPVOID) &console_on);
+    if (result) {
         printf("[Error] Time Broadcasting Thread Started.\n");
         console_on = false;
-        WaitForSingleObject(server.handle, INFINITE);
-        CloseHandle(server.handle);
-        WaitForSingleObject(record_t.handle, INFINITE);
-        CloseHandle(record_t.handle);
+        pthread_join(server, NULL);
+        //WaitForSingleObject(server.handle, INFINITE);
+        //CloseHandle(server.handle);
+        pthread_join(record_t, NULL);
+        //WaitForSingleObject(record_t.handle, INFINITE);
+        //CloseHandle(record_t.handle);
         v_t.stop();
-        WaitForSingleObject(timer.handle, INFINITE);
-        CloseHandle(timer.handle);
-        CloseHandle(action_lock);
-        CloseHandle(data_lock);
+        pthread_join(timer, NULL);
+        //WaitForSingleObject(timer.handle, INFINITE);
+        //CloseHandle(timer.handle);
+
+
         return 1;
     }
 
     // bot_spreading
-    spreading.handle = CreateThread(NULL, 0, bot_spreading, (LPVOID) &console_on, 0, &(spreading.id));
-    if (!spreading.handle) {
+    result = pthread_create(&spreading, NULL, bot_spreading, (LPVOID) &console_on);
+    if (result) {
         printf("[Error] Bot Spreading Thread Started.\n");
         console_on = false;
-        WaitForSingleObject(server.handle, INFINITE);
-        CloseHandle(server.handle);
-        WaitForSingleObject(record_t.handle, INFINITE);
-        CloseHandle(record_t.handle);
-        WaitForSingleObject(time_broadcast.handle, INFINITE);
-        CloseHandle(time_broadcast.handle);
+        pthread_join(server, NULL);
+        //WaitForSingleObject(server.handle, INFINITE);
+        //CloseHandle(server.handle);
+        pthread_join(record_t, NULL);
+        //WaitForSingleObject(record_t.handle, INFINITE);
+        //CloseHandle(record_t.handle);
+        pthread_join(time_broadcast, NULL);
+        //WaitForSingleObject(time_broadcast.handle, INFINITE);
+        //CloseHandle(time_broadcast.handle);
         v_t.stop();
-        WaitForSingleObject(timer.handle, INFINITE);
-        CloseHandle(timer.handle);
-        CloseHandle(action_lock);
-        CloseHandle(data_lock);
+        pthread_join(timer, NULL);
+        //WaitForSingleObject(timer.handle, INFINITE);
+        //CloseHandle(timer.handle);
+
+
         return 1;
     }
 
@@ -315,29 +332,33 @@ int main() {
             scanf("%d", &TSD);
         } else if (UserCommand == "add_sensor") {
             int num;
-            HANDLE t;
-            DWORD id;
+            pthread_t t;
             printf("Numbers: ");
             scanf("%d", &num);
             if (num > host_set.size()) {
                 printf("[Warning] Number is bigger than host.\n");
             } else {
-                t = CreateThread(NULL, 0, change_sensor, new pair<bool *, int>(&console_on, num), 0, &id);
-                thread_handle.push_back(t);
-                thread_id.push_back(id);
+                result = pthread_create(&t, NULL, change_sensor, (LPVOID) (new pair<bool *, int>(&console_on, num)));
+                if (result) {
+                    thread_handle.push_back(t);
+                } else {
+                    printf("[Error] Create Pthread Failed.\n");
+                }
             }
         } else if (UserCommand == "add_crawler") {
             int num;
-            HANDLE t;
-            DWORD id;
+            pthread_t t;
             printf("Numbers: ");
             scanf("%d", &num);
             if (num > host_set.size()) {
                 printf("[Warning] Number is bigger than host.\n");
             } else {
-                t = CreateThread(NULL, 0, change_crawler, new pair<bool *, int>(&console_on, num), 0, &id);
-                thread_handle.push_back(t);
-                thread_id.push_back(id);
+                result = pthread_create(&t, NULL, change_crawler, (LPVOID) (new pair<bool *, int>(&console_on, num)));
+                if (result) {
+                    thread_handle.push_back(t);
+                } else {
+                    printf("[Error] Create Pthread Failed.\n");
+                }
             }
         } else if (UserCommand == "send_time") {
             if (time_flag) {
@@ -386,21 +407,16 @@ int main() {
 
     // exit
     console_on = false;
-    WaitForSingleObject(server.handle, INFINITE);
-    CloseHandle(server.handle);
-    WaitForSingleObject(spreading.handle, INFINITE);
-    CloseHandle(spreading.handle);
-    WaitForSingleObject(time_broadcast.handle, INFINITE);
-    CloseHandle(time_broadcast.handle);
+    pthread_join(server, NULL);
+    pthread_join(spreading, NULL);
+    pthread_join(time_broadcast, NULL);
     v_t.stop();
-    WaitForSingleObject(timer.handle, INFINITE);
-    CloseHandle(timer.handle);
-    WaitForMultipleObjects((DWORD) thread_handle.size(), &thread_handle[0], true, INFINITE);
-    CloseHandle(action_lock);
-    CloseHandle(data_lock);
+    pthread_join(timer, NULL);
     for (auto i : thread_handle) {
-        CloseHandle(i);
+        pthread_join(i, NULL);
     }
+
+
     _socket::wsacleanup_();
 
     set<HOST *, HOSTPtrComp>::iterator it_i;
@@ -437,7 +453,7 @@ int main() {
     servent_bot_set.clear();
 }
 
-DWORD WINAPI record(LPVOID console_on) {
+void *record(LPVOID console_on) {
     printf("[INFO] Record Thread Started.\n");
     bool *console = (bool *) console_on;
     ofstream record;
@@ -454,29 +470,33 @@ DWORD WINAPI record(LPVOID console_on) {
     }
     record.close();
     printf("[INFO] Record Thread Stop.\n");
-    return 1;
+    pthread_exit(NULL);
+    return NULL;
 }
 
-DWORD WINAPI virtual_time(LPVOID null) {
+void *virtual_time(LPVOID null) {
     printf("[INFO] Timer Thread Started.\n");
     v_t.run();
     printf("[INFO] Timer Thread Stop.\n");
-    return 1;
+    pthread_exit(NULL);
+    return NULL;
 }
 
-DWORD WINAPI server_accept(LPVOID console) {
+void *server_accept(LPVOID console) {
     printf("[INFO] Server Thread Started.\n");
     bool *console_on = (bool *) console;
-    vector<MyThread *> t_v;
+    vector<pthread_t *> t_v;
     _socketserver server((char *) PORT, BUFSIZE);
     if (server.get_status()) {
         while (*console_on) {
             if (server.check_connect_(500)) {
                 _socket *client = server.accept_();
                 if (client) {
-                    MyThread *temp = new MyThread;
-                    temp->handle = CreateThread(NULL, 0, handle_client, (LPVOID) client, 0, &(temp->id));
-                    if (temp->handle) {
+                    //MyThread *temp = new MyThread;
+                    int result = 0;
+                    pthread_t *temp = new pthread_t;
+                    result = pthread_create(temp, NULL, handle_client, (LPVOID) client);
+                    if (!result) {
                         if (show_debug_msg) {
                             printf("[INFO] Client Accepted.\n");
                         }
@@ -491,18 +511,18 @@ DWORD WINAPI server_accept(LPVOID console) {
     // exit
     server.close_();
     if (!t_v.empty()) {
-        vector<MyThread *>::iterator it_i;
+        vector<pthread_t *>::iterator it_i;
         for (it_i = t_v.begin(); it_i != t_v.end(); t_v.erase(it_i)) {
-            WaitForSingleObject((*it_i)->handle, INFINITE);
-            CloseHandle((*it_i)->handle);
+            pthread_join(**it_i, NULL);
             delete (*it_i);
         }
     }
     printf("[INFO] Server Thread Stop.\n");
-    return 1;
+    pthread_exit(NULL);
+    return NULL;
 }
 
-DWORD WINAPI handle_client(LPVOID s) {
+void *handle_client(LPVOID s) {
     srand(unsigned(chrono::duration_cast<chrono::nanoseconds>(start_time - chrono::steady_clock::now()).count()));
     if (show_debug_msg) {
         printf("[INFO] Client Thread Started.\n");
@@ -538,10 +558,11 @@ DWORD WINAPI handle_client(LPVOID s) {
     if (show_debug_msg) {
         printf("[INFO] Client Thread Stop.\n");
     }
-    return 1;
+    pthread_exit(NULL);
+    return NULL;
 }
 
-DWORD WINAPI virtual_broadcast(LPVOID console) {
+void *virtual_broadcast(LPVOID console) {
     printf("[INFO] Time Broadcast Thread Started.\n");
     bool *console_on = (bool *) console;
     while (*console_on) {
@@ -572,10 +593,11 @@ DWORD WINAPI virtual_broadcast(LPVOID console) {
         }
     }
     printf("[INFO] Time Broadcast Thread Stop.\n");
-    return 1;
+    pthread_exit(NULL);
+    return NULL;
 }
 
-DWORD WINAPI bot_spreading(LPVOID console) {
+void *bot_spreading(LPVOID console) {
     printf("[INFO] Bot Spreading Thread Started.\n");
     srand(unsigned(chrono::duration_cast<chrono::nanoseconds>(start_time - chrono::steady_clock::now()).count()));
     bool *console_on = (bool *) console;
@@ -594,12 +616,12 @@ DWORD WINAPI bot_spreading(LPVOID console) {
                     if (show_debug_msg) {
                         printf("[INFO] Spreading Wait Lock.\n");
                     }
-                    WaitForSingleObject(action_lock, INFINITE);
+                    pthread_mutex_lock(&action_lock);
                     if (show_debug_msg) {
                         printf("[INFO] Spreading Get Lock.\n");
                     }
                     servent_infection(console_on);
-                    ReleaseMutex(action_lock);
+                    pthread_mutex_unlock(&action_lock);
                     if (show_debug_msg) {
                         printf("[INFO] Spreading Release Lock.\n");
                     }
@@ -610,13 +632,13 @@ DWORD WINAPI bot_spreading(LPVOID console) {
             if (show_debug_msg) {
                 printf("[INFO] Spreading Wait Lock.\n");
             }
-            WaitForSingleObject(action_lock, INFINITE);
+            pthread_mutex_lock(&action_lock);
             if (show_debug_msg) {
                 printf("[INFO] Spreading Get Lock.\n");
             }
             printf("[INFO] Starting Inflection.\n");
             servent_first_infection(console_on);
-            ReleaseMutex(action_lock);
+            pthread_mutex_unlock(&action_lock);
             if (show_debug_msg) {
                 printf("[INFO] Spreading Release Lock.\n");
             }
@@ -624,10 +646,11 @@ DWORD WINAPI bot_spreading(LPVOID console) {
         Sleep(TSD);
     }
     printf("[INFO] Bot Spreading Thread Stop.\n");
-    return 1;
+    pthread_exit(NULL);
+    return NULL;
 }
 
-DWORD WINAPI handle_bot_spreading(LPVOID client) {
+void *handle_bot_spreading(LPVOID client) {
     pair<_socket *, HOST *> *p = (pair<_socket *, HOST *> *) client;
     srand(unsigned(chrono::duration_cast<chrono::nanoseconds>(start_time - chrono::steady_clock::now()).count()));
     _socket *client_i = p->first;
@@ -649,7 +672,7 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
                     recv_loop = false;
                     if (token_id != 5) {
                         printf("[Warning] Bot Unable To Start Up.\n");
-                        WaitForSingleObject(data_lock, INFINITE);
+                        pthread_mutex_lock(&data_lock);
                         host_set.insert(target_i);
                         bot_set.erase(bot_set.find(target_i));
                         it_i = servent_bot_set.find(target_i);
@@ -660,13 +683,13 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
                         } else {
                             servent_bot_set.erase(it_i);
                         }
-                        ReleaseMutex(data_lock);
+                        pthread_mutex_unlock(&data_lock);
                     }
                 }
             } else {
                 recv_loop = false;
                 printf("[Warning] Bot Unable To Start Up.\n");
-                WaitForSingleObject(data_lock, INFINITE);
+                pthread_mutex_lock(&data_lock);
                 host_set.insert(target_i);
                 bot_set.erase(bot_set.find(target_i));
                 it_i = servent_bot_set.find(target_i);
@@ -677,13 +700,13 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
                 } else {
                     bot_set.erase(it_i);
                 }
-                ReleaseMutex(data_lock);
+                pthread_mutex_unlock(&data_lock);
             }
         } else {
             recv_loop = false;
             printf("[Warning] Socket Timeout or Error.\n");
             printf("[Warning] Bot Unable To Start Up.\n");
-            WaitForSingleObject(data_lock, INFINITE);
+            pthread_mutex_lock(&data_lock);
             host_set.insert(target_i);
             bot_set.erase(bot_set.find(target_i));
             it_i = servent_bot_set.find(target_i);
@@ -694,7 +717,7 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
             } else {
                 servent_bot_set.erase(it_i);
             }
-            ReleaseMutex(data_lock);
+            pthread_mutex_unlock(&data_lock);
         }
     }
 
@@ -702,14 +725,15 @@ DWORD WINAPI handle_bot_spreading(LPVOID client) {
     (client_i)->close_();
     delete client_i;
     delete p;
-    return 1;
+    pthread_exit(NULL);
+    return NULL;
 }
 
-DWORD WINAPI change_sensor(LPVOID console_on) {
+void *change_sensor(LPVOID console_on) {
     if (show_debug_msg) {
         printf("[INFO] Change Sensor Wait Lock.\n");
     }
-    WaitForSingleObject(action_lock, INFINITE);
+    pthread_mutex_lock(&action_lock);
     if (show_debug_msg) {
         printf("[INFO] Change Sensor Get Lock.\n");
     }
@@ -730,10 +754,10 @@ DWORD WINAPI change_sensor(LPVOID console_on) {
                 printf("[Warning] %s:%s Send failed.(Sensor)\n", (target->ip).c_str(),
                        (target->port).c_str());
             } else {
-                WaitForSingleObject(data_lock, INFINITE);
+                pthread_mutex_lock(&data_lock);
                 sensor_set.insert(target);
                 host_set.erase(host_i);
-                ReleaseMutex(data_lock);
+                pthread_mutex_unlock(&data_lock);
             }
         } else {
             printf("[Warning] %s:%s Connected failed.(Sensor)\n", (target->ip).c_str(), (target->port).c_str());
@@ -741,19 +765,20 @@ DWORD WINAPI change_sensor(LPVOID console_on) {
         client.shutdown_(_socket::BOTH);
         client.close_();
     }
-    ReleaseMutex(action_lock);
+    pthread_mutex_unlock(&action_lock);
     if (show_debug_msg) {
         printf("[INFO] Change Sensor Release Lock.\n");
     }
     delete p;
-    return 1;
+    pthread_exit(NULL);
+    return NULL;
 }
 
-DWORD WINAPI change_crawler(LPVOID console_on) {
+void *change_crawler(LPVOID console_on) {
     if (show_debug_msg) {
         printf("[INFO] Change Crawler Wait Lock.\n");
     }
-    WaitForSingleObject(action_lock, INFINITE);
+    pthread_mutex_lock(&action_lock);
     if (show_debug_msg) {
         printf("[INFO] Change Crawler Get Lock.\n");
     }
@@ -787,10 +812,10 @@ DWORD WINAPI change_crawler(LPVOID console_on) {
                             int token_id = handle_msg(&client, msg_ptr, target);
                             if (token_id == 5) {
                                 recv_loop = false;
-                                WaitForSingleObject(data_lock, INFINITE);
+                                pthread_mutex_lock(&data_lock);
                                 crawler_set.insert(target);
                                 host_set.erase(host_i);
-                                ReleaseMutex(data_lock);
+                                pthread_mutex_unlock(&data_lock);
                             }
                         } else {
                             recv_loop = false;
@@ -809,12 +834,13 @@ DWORD WINAPI change_crawler(LPVOID console_on) {
         client.shutdown_(_socket::BOTH);
         client.close_();
     }
-    ReleaseMutex(action_lock);
+    pthread_mutex_unlock(&action_lock);
     if (show_debug_msg) {
         printf("[INFO] Change Crawler Release Lock.\n");
     }
     delete p;
-    return 1;
+    pthread_exit(NULL);
+    return NULL;
 }
 
 vector<string> split(const string &str, char delimiter) {
@@ -866,10 +892,10 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 arr = split(msg_data, ':');
                 for (auto i:servent_bot_set) {
                     if (i->ip == arr.at(0) && i->port == arr.at(1)) {
-                        WaitForSingleObject(data_lock, INFINITE);
+                        pthread_mutex_lock(&data_lock);
                         check_bot_set.insert(i);
                         servent_bot_set.erase(servent_bot_set.find(i));
-                        ReleaseMutex(data_lock);
+                        pthread_mutex_unlock(&data_lock);
                         break;
                     }
                 }
@@ -891,10 +917,10 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     } else {
                         for (auto i:servent_bot_set) {
                             if (i->ip == arr.at(0) && i->port == arr.at(1)) {
-                                WaitForSingleObject(data_lock, INFINITE);
+                                pthread_mutex_lock(&data_lock);
                                 sleep_bot_set.insert(i);
                                 servent_bot_set.erase(servent_bot_set.find(i));
-                                ReleaseMutex(data_lock);
+                                pthread_mutex_unlock(&data_lock);
                                 break;
                             }
                         }
@@ -985,9 +1011,9 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 create = new HOST;
                 create->ip = arr.at(0);
                 create->port = arr.at(1);
-                WaitForSingleObject(data_lock, INFINITE);
+                pthread_mutex_lock(&data_lock);
                 host_set.insert(create);
-                ReleaseMutex(data_lock);
+                pthread_mutex_unlock(&data_lock);
                 if (client->send_((char *) "OK") == -1) {
                     printf("[Warning] Host %s:%s Register Failed.\n", (create->ip).c_str(), (create->port).c_str());
                 }
@@ -999,9 +1025,9 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 create = new HOST;
                 create->ip = arr.at(0);
                 create->port = arr.at(1);
-                WaitForSingleObject(data_lock, INFINITE);
+                pthread_mutex_lock(&data_lock);
                 controler_set.insert(create);
-                ReleaseMutex(data_lock);
+                pthread_mutex_unlock(&data_lock);
                 break;
 
                 // EXIT
@@ -1034,8 +1060,7 @@ int handle_msg(_socket *client, string msg_data) {
 int servent_infection(bool *console) {
     int random_num, delay;
     set<HOST *, HOSTPtrComp>::iterator host_i;
-    vector<HOST *> target_list;
-    vector<_socket *> client_list;
+    set<HOST *, HOSTPtrComp> random_list;
     HOST *target = NULL;
     string send_data, recv_data;
     if (host_set.size() > GROWT && host_set.size() > GROWNUM) {
@@ -1048,49 +1073,66 @@ int servent_infection(bool *console) {
             delay = delay_choose();
             if (delay == 0) {
                 send_data = "Change:ServentBot";
+                set<HOST *, HOSTPtrComp> my_list(servent_bot_set.begin(), servent_bot_set.end());
+                set<HOST *, HOSTPtrComp>::iterator it_find = my_list.find(target);
+                if (it_find != my_list.end() && it_find != my_list.end()) {
+                    my_list.erase(my_list.find(target));
+                }
+                set<HOST *, HOSTPtrComp>::iterator bot_i;
+                while (random_list.size() < PLSIZE) {
+                    random_num = (rand() * rand()) % my_list.size();
+                    bot_i = my_list.begin();
+                    advance(bot_i, random_num);
+                    random_list.insert(*bot_i);
+                    my_list.erase(bot_i);
+                }
+                for (auto host : random_list) {
+                    send_data += ":" + host->ip + ":" + host->port;
+                }
+                if (show_debug_msg) {
+                    printf("[INFO] Sending PeerList...(%s)\n", send_data.c_str());
+                }
+
             } else {
                 send_data = "Change:ClientBot";
+
+                set<HOST *, HOSTPtrComp>::iterator servent_i;
+                while (random_list.size() < (servent_bot_set.size() > ServentPerClient ? ServentPerClient
+                                                                                       : servent_bot_set.size())) {
+                    random_num = (rand() * rand()) % servent_bot_set.size();
+                    servent_i = servent_bot_set.begin();
+                    advance(servent_i, random_num);
+                    random_list.insert(*servent_i);
+                }
+
+                for (auto host : random_list) {
+                    send_data += ":" + host->ip + ":" + host->port;
+                }
+                if (show_debug_msg) {
+                    printf("[INFO] Sending ServentList...(%s)\n", send_data.c_str());
+                }
+
             }
             _socket *client = new _socket((char *) ((target->ip).c_str()), (char *) ((target->port).c_str()), BUFSIZE);
             if (client->get_status()) {
                 if (client->send_((char *) send_data.c_str()) == -1) {
                     printf("[Warning] HOST %s:%s Change Bot Failed.\n", (target->ip).c_str(), (target->port).c_str());
-                    delete client;
                 } else {
-                    client_list.push_back(client);
-                    target_list.push_back(target);
-                    WaitForSingleObject(data_lock, INFINITE);
+                    client->shutdown_(_socket::BOTH);
+                    client->close_();
+                    pthread_mutex_lock(&data_lock);
                     bot_set.insert(target);
                     if (delay == 0)
                         servent_bot_set.insert(target);
                     host_set.erase(host_i);
-                    ReleaseMutex(data_lock);
+                    pthread_mutex_unlock(&data_lock);
                     i++;
                 }
             } else {
                 printf("[Warning] HOST %s:%s Change Bot Failed.\n", (target->ip).c_str(), (target->port).c_str());
-                delete client;
             }
-        }
-
-        vector<HOST *>::iterator target_i;
-        vector<_socket *>::iterator client_i;
-        vector<HANDLE> handle;
-        vector<DWORD> tid;
-
-        for (target_i = target_list.begin(), client_i = client_list.begin();
-             target_i != target_list.end() && client_i != client_list.end() && *console;
-             target_list.erase(target_i), client_list.erase(client_i)) {
-            DWORD temp;
-            HANDLE t = CreateThread(NULL, 0, handle_bot_spreading,
-                                    (LPVOID) new pair<_socket *, HOST *>(*client_i, *target_i), 0, &temp);
-            handle.push_back(t);
-            tid.push_back(temp);
-            Sleep(5);
-        }
-        WaitForMultipleObjects((DWORD) handle.size(), &handle[0], true, INFINITE);
-        for (auto i : handle) {
-            CloseHandle(i);
+            delete client;
+            random_list.clear();
         }
     }
     return 1;
@@ -1118,11 +1160,11 @@ int servent_first_infection(bool *console) {
                 } else {
                     client_list.push_back(client);
                     target_list.push_back(target);
-                    WaitForSingleObject(data_lock, INFINITE);
+                    pthread_mutex_lock(&data_lock);
                     bot_set.insert(target);
                     servent_bot_set.insert(target);
                     host_set.erase(host_i);
-                    ReleaseMutex(data_lock);
+                    pthread_mutex_unlock(&data_lock);
                     i++;
                 }
             } else {
@@ -1133,22 +1175,22 @@ int servent_first_infection(bool *console) {
 
         vector<HOST *>::iterator target_i;
         vector<_socket *>::iterator client_i;
-        vector<HANDLE> handle;
-        vector<DWORD> tid;
+        vector<pthread_t> handle;
+        pthread_t t;
+        int result = 0;
 
         for (target_i = target_list.begin(), client_i = client_list.begin();
              target_i != target_list.end() && client_i != client_list.end() && *console;
              target_list.erase(target_i), client_list.erase(client_i)) {
-            DWORD temp;
-            HANDLE t = CreateThread(NULL, 0, handle_bot_spreading,
-                                    (LPVOID) new pair<_socket *, HOST *>(*client_i, *target_i), 0, &temp);
-            handle.push_back(t);
-            tid.push_back(temp);
-            Sleep(5);
+            result = pthread_create(&t, NULL, handle_bot_spreading,
+                                    (LPVOID) new pair<_socket *, HOST *>(*client_i, *target_i));
+            if (!result) {
+                handle.push_back(t);
+                Sleep(5);
+            }
         }
-        WaitForMultipleObjects((DWORD) handle.size(), &handle[0], true, INFINITE);
         for (auto i : handle) {
-            CloseHandle(i);
+            pthread_join(i, NULL);
         }
     }
     return 1;
