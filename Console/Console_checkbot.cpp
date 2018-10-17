@@ -5,6 +5,7 @@
 #include <fstream>
 #include <algorithm>
 #include <chrono>
+#include <queue>
 #include <stdlib.h>
 #include "_socketserver.h"
 #include "Timer.h"
@@ -64,6 +65,8 @@ DWORD WINAPI change_sensor(LPVOID);
 
 DWORD WINAPI change_crawler(LPVOID);
 
+DWORD WINAPI ban_broadcast(LPVOID);
+
 vector<string> split(const string &, char);
 
 int delay_choose(void);
@@ -97,13 +100,13 @@ bool spreading_flag = false;
 // Time Spreading Delay(mini seconds-RT)
 short TSD = 500;
 // MsgType Define
-string msg_token[] = {"ChangeCheckBot", "Promotion", "Request", "HOST", "CTRL", "EXIT", "R"};
+string msg_token[] = {"ChangeCheckBot", "Promotion", "Request", "HOST", "CTRL", "EXIT", "Ban:", "R"};
 
 // Global Variables
 // init
 Timer v_t(100.0);
 chrono::steady_clock::time_point start_time;
-HANDLE action_lock, data_lock;
+HANDLE action_lock, data_lock, ban_lock;
 set<HOST *, HOSTPtrComp> host_set;
 set<HOST *, HOSTPtrComp> bot_set;
 set<HOST *, HOSTPtrComp> servent_bot_set;
@@ -113,6 +116,9 @@ set<HOST *, HOSTPtrComp> crawler_set;
 set<HOST *, HOSTPtrComp> sensor_set;
 set<HOST *, HOSTPtrComp> controler_set;
 set<HOST *, HOSTPtrComp> getcha_set;
+set<HOST *, HOSTPtrComp> ban_set;
+
+queue<string> ban_queue;
 
 int main() {
     // init
@@ -123,6 +129,7 @@ int main() {
     MyThread server;
     MyThread time_broadcast;
     MyThread spreading;
+    MyThread ban;
     vector<HANDLE> thread_handle;
     vector<DWORD> thread_id;
     action_lock = CreateMutex(NULL, false, NULL);
@@ -136,6 +143,12 @@ int main() {
         CloseHandle(action_lock);
         return 1;
     }
+    ban_lock = CreateMutex(NULL, false, NULL);
+    if (data_lock == NULL) {
+        printf("[ERROR] CreateMutex Error. ErrorCode=%d", GetLastError());
+        CloseHandle(ban_lock);
+        return 1;
+    }
 
     // main
     bool console_on = true;
@@ -147,6 +160,7 @@ int main() {
         console_on = false;
         CloseHandle(action_lock);
         CloseHandle(data_lock);
+        CloseHandle(ban_lock);
         return 1;
     }
 
@@ -159,6 +173,7 @@ int main() {
         CloseHandle(timer.handle);
         CloseHandle(action_lock);
         CloseHandle(data_lock);
+        CloseHandle(ban_lock);
         return 1;
     }
 
@@ -175,6 +190,7 @@ int main() {
         CloseHandle(record_t.handle);
         CloseHandle(action_lock);
         CloseHandle(data_lock);
+        CloseHandle(ban_lock);
         return 1;
     }
     server.handle = CreateThread(NULL, 0, server_accept, (LPVOID) &console_on, 0, &(server.id));
@@ -189,6 +205,7 @@ int main() {
         CloseHandle(record_t.handle);
         CloseHandle(action_lock);
         CloseHandle(data_lock);
+        CloseHandle(ban_lock);
         return 1;
     }
 
@@ -206,6 +223,7 @@ int main() {
         CloseHandle(timer.handle);
         CloseHandle(action_lock);
         CloseHandle(data_lock);
+        CloseHandle(ban_lock);
         return 1;
     }
 
@@ -225,6 +243,28 @@ int main() {
         CloseHandle(timer.handle);
         CloseHandle(action_lock);
         CloseHandle(data_lock);
+        CloseHandle(ban_lock);
+        return 1;
+    }
+
+    ban.handle = CreateThread(NULL, 0, ban_broadcast, (LPVOID) &console_on, 0, &(ban.id));
+    if (!ban.handle) {
+        printf("[Error] Ban Broadcast Thread Started.\n");
+        console_on = false;
+        WaitForSingleObject(server.handle, INFINITE);
+        CloseHandle(server.handle);
+        WaitForSingleObject(record_t.handle, INFINITE);
+        CloseHandle(record_t.handle);
+        WaitForSingleObject(spreading.handle, INFINITE);
+        CloseHandle(spreading.handle);
+        WaitForSingleObject(time_broadcast.handle, INFINITE);
+        CloseHandle(time_broadcast.handle);
+        v_t.stop();
+        WaitForSingleObject(timer.handle, INFINITE);
+        CloseHandle(timer.handle);
+        CloseHandle(action_lock);
+        CloseHandle(data_lock);
+        CloseHandle(ban_lock);
         return 1;
     }
 
@@ -237,7 +277,7 @@ int main() {
     printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
     printf("list_bot : List Bot\nlist_ctrl : List Controler\n");
     printf("list_servent_bot : List Servent_Bot\nlist_sleep_bot : List Sleep_Bot\n");
-    printf("list_check_bot : List Check_Bot\n");
+    printf("list_check_bot : List Check_Bot\nlist_ban_bot : List Ban_Bot\n");
     printf("list_crawler : List Crawler\nlist_sensor : List Sensor\n");
     printf("list_getcha : List Getcha\nglobal : Global Status\n");
     printf("timestamp : Current Timestamp\nset_time_rate : Set Time Rate\n");
@@ -298,11 +338,16 @@ int main() {
             for (auto i : getcha_set) {
                 printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
             }
+        } else if (UserCommand == "list_ban") {
+            printf("Ban List\n");
+            for (auto i : ban_set) {
+                printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
+            }
         } else if (UserCommand == "global") {
-            printf("Host Number: %d\nBot Number: %d\nSevent_Bot Number: %d\nSleep_Bot Number: %d\nCheck_Bot Number: %d\nControler Number: %d\nCrawler Number: %d\nSensor Number: %d\nGetcha Number: %d\n",
+            printf("Host Number: %d\nBot Number: %d\nSevent_Bot Number: %d\nSleep_Bot Number: %d\nCheck_Bot Number: %d\nControler Number: %d\nCrawler Number: %d\nSensor Number: %d\nGetcha Number: %d\nBan Number: %d",
                    host_set.size(), bot_set.size(), servent_bot_set.size(), sleep_bot_set.size(), check_bot_set.size(),
                    controler_set.size(), crawler_set.size(), sensor_set.size(),
-                   getcha_set.size());
+                   getcha_set.size(), ban_set.size());
         } else if (UserCommand == "timestamp") {
             printf("timestamp: %s\n", v_t.timestamp().c_str());
         } else if (UserCommand == "set_time_rate") {
@@ -373,7 +418,7 @@ int main() {
             printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
             printf("list_bot : List Bot\nlist_ctrl : List Controler\n");
             printf("list_servent_bot : List Servent_Bot\nlist_sleep_bot : List Sleep_Bot\n");
-            printf("list_check_bot : List Check_Bot\n");
+            printf("list_check_bot : List Check_Bot\nlist_ban_bot : List Ban_Bot\n");
             printf("list_crawler : List Crawler\nlist_sensor : List Sensor\n");
             printf("list_getcha : List Getcha\nglobal : Global Status\n");
             printf("timestamp : Current Timestamp\nset_time_rate : Set Time Rate\n");
@@ -390,6 +435,8 @@ int main() {
     CloseHandle(server.handle);
     WaitForSingleObject(spreading.handle, INFINITE);
     CloseHandle(spreading.handle);
+    WaitForSingleObject(ban.handle, INFINITE);
+    CloseHandle(ban.handle);
     WaitForSingleObject(time_broadcast.handle, INFINITE);
     CloseHandle(time_broadcast.handle);
     v_t.stop();
@@ -398,6 +445,7 @@ int main() {
     WaitForMultipleObjects((DWORD) thread_handle.size(), &thread_handle[0], true, INFINITE);
     CloseHandle(action_lock);
     CloseHandle(data_lock);
+    CloseHandle(ban_lock);
     for (auto i : thread_handle) {
         CloseHandle(i);
     }
@@ -434,6 +482,11 @@ int main() {
             delete *it_i;
         }
     }
+    if (!ban_set.empty()) {
+        for (it_i = ban_set.begin(); it_i != ban_set.end(); ban_set.erase(it_i++)) {
+            delete *it_i;
+        }
+    }
     servent_bot_set.clear();
 }
 
@@ -443,13 +496,13 @@ DWORD WINAPI record(LPVOID console_on) {
     ofstream record;
     record.open(doc_name);
     record
-            << "timestamp, host number, bot number, servent number, client number, sleep number, check number, senser number, crawler number, getcha number"
+            << "timestamp, host number, bot number, servent number, client number, sleep number, check number, senser number, crawler number, getcha number, ban number"
             << endl;
     while (*console) {
         record << v_t.timestamp() << ", " << host_set.size() << ", " << bot_set.size() << ", " << servent_bot_set.size()
                << ", " << bot_set.size() - servent_bot_set.size() - sleep_bot_set.size() << ", " << sleep_bot_set.size()
                << ", " << check_bot_set.size() << ", " << sensor_set.size()
-               << ", " << crawler_set.size() << ", " << getcha_set.size() << endl;
+               << ", " << crawler_set.size() << ", " << getcha_set.size() << ", " << ban_set.size() << endl;
         Sleep(record_rate);
     }
     record.close();
@@ -817,6 +870,36 @@ DWORD WINAPI change_crawler(LPVOID console_on) {
     return 1;
 }
 
+DWORD WINAPI ban_broadcast(LPVOID console_on) {
+    bool *console = (bool *) console_on;
+    while (*console) {
+        set<HOST *, HOSTPtrComp>::iterator it_i;
+        if (!ban_queue.empty() && !controler_set.empty()) {
+            for (it_i = controler_set.begin(); it_i != controler_set.end() && *console; it_i++) {
+                _socket client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(), BUFSIZE);
+                if (client.get_status()) {
+                    string time_msg = ban_queue.front();
+                    if (client.send_((char *) time_msg.c_str()) == -1) {
+                        printf("[Warning] Controler %s:%s Time Broadcast Failed.\n", ((*it_i)->ip).c_str(),
+                               ((*it_i)->port).c_str());
+                    }
+                    client.shutdown_(_socket::BOTH);
+                } else {
+                    printf("[Warning] Controler %s:%s Time Broadcast Failed.\n", ((*it_i)->ip).c_str(),
+                           ((*it_i)->port).c_str());
+                }
+                client.close_();
+                WaitForSingleObject(ban_lock, INFINITE);
+                ban_queue.pop();
+                ReleaseMutex(ban_lock);
+            }
+        } else {
+            Sleep(TSD);
+        }
+    }
+    return 1;
+}
+
 vector<string> split(const string &str, char delimiter) {
     vector<string> tokens;
     string token;
@@ -857,7 +940,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
     if (msg_type_no < 0)
         printf("[Warning] Message Token Invalid. Msg: %s\n", msg_data.c_str());
     else {
-        int random_num;
+        int random_num, psize;
         string output;
         msg_data.assign(msg_data, msg_token[msg_type_no].length(), msg_data.length() - msg_token[msg_type_no].length());
         switch (msg_type_no) {
@@ -1008,8 +1091,22 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
             case 5:
                 break;
 
-                // R
             case 6:
+                arr = split(msg_data, ':');
+                create = new HOST;
+                create->ip = arr.at(0);
+                create->port = arr.at(1);
+                psize = ban_set.size();
+                ban_set.insert(create);
+                if (ban_set.size() > psize) {
+                    WaitForSingleObject(ban_lock, INFINITE);
+                    ban_queue.push("Ban:" + msg_data);
+                    ReleaseMutex(ban_lock);
+                }
+                break;
+
+                // R
+            case 7:
                 vector<string> ip_arr;
                 arr = split(msg_data, '#');
                 arr.erase(arr.begin());
