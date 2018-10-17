@@ -304,7 +304,7 @@ int main() {
                 printf("[Warning] Number is bigger than host.\n");
             } else {
                 result = pthread_create(&t, NULL, change_sensor, (LPVOID) (new pair<bool *, int>(&console_on, num)));
-                if (result) {
+                if (!result) {
                     thread_handle.push_back(t);
                 } else {
                     printf("[Error] Create Pthread Failed.\n");
@@ -319,7 +319,7 @@ int main() {
                 printf("[Warning] Number is bigger than host.\n");
             } else {
                 result = pthread_create(&t, NULL, change_crawler, (LPVOID) (new pair<bool *, int>(&console_on, num)));
-                if (result) {
+                if (!result) {
                     thread_handle.push_back(t);
                 } else {
                     printf("[Error] Create Pthread Failed.\n");
