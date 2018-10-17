@@ -339,7 +339,7 @@ int main() {
                 printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
             }
         } else if (UserCommand == "list_ban_bot") {
-            printf("Ban List\n");
+            printf("Ban Bot List\n");
             for (auto i : ban_set) {
                 printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
             }
