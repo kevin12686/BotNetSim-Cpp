@@ -125,17 +125,6 @@ int main() {
     pthread_t timer, record_t, server, time_broadcast, spreading, ban;
     vector<pthread_t> thread_handle;
 
-    action_lock = CreateMutex(NULL, false, NULL);
-    if (action_lock == NULL) {
-        printf("[ERROR] CreateMutex Error. ErrorCode=%d", GetLastError());
-        return 1;
-    }
-    data_lock = CreateMutex(NULL, false, NULL);
-    if (data_lock == NULL) {
-        printf("[ERROR] CreateMutex Error. ErrorCode=%d", GetLastError());
-        return 1;
-    }
-
     // main
     bool console_on = true;
 
