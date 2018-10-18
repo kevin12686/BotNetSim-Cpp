@@ -1,24 +1,28 @@
 #include <sstream>
 #include <windows.h>
 #include "Timer.h"
+#include <iomanip>
 
-Timer::Timer(float rate) {
+Timer::Timer(int rate) {
     this->setDateTime(this->Default_Datetime);
     this->setRate(rate);
     this->Run = false;
+    this->time_mutex = CreateMutex(nullptr, false, nullptr);
 }
 
-Timer::Timer(int *datetime, float rate) {
+Timer::Timer(int *datetime, int rate) {
     this->setDateTime(datetime);
     this->setRate(rate);
     this->Run = false;
+    this->time_mutex = CreateMutex(nullptr, false, nullptr);
 }
 
-Timer::Timer(int year, int month, int day, int hour, int minute, int second, float rate) {
+Timer::Timer(int year, int month, int day, int hour, int minute, int second, int rate) {
     int datetime[6] = {year, month, day, hour, minute, second};
     this->setDateTime(datetime);
     this->setRate(rate);
     this->Run = false;
+    this->time_mutex = CreateMutex(nullptr, false, nullptr);
 }
 
 int *Timer::getDateTime() {
@@ -50,6 +54,14 @@ int Timer::getSecond() {
     return this->DateTime[5];
 }
 
+void Timer::lock() {
+    WaitForSingleObject(this->time_mutex, INFINITE);
+}
+
+void Timer::release() {
+    ReleaseMutex(this->time_mutex);
+}
+
 void Timer::setDateTime(int *datetime) {
     this->DateTime = datetime;
 }
@@ -78,11 +90,11 @@ void Timer::setSecond(int second) {
     (this->DateTime[5]) = second;
 }
 
-float Timer::getRate() {
+int Timer::getRate() {
     return this->Rate;
 }
 
-void Timer::setRate(float rate) {
+void Timer::setRate(int rate) {
     this->Rate = rate;
 }
 
@@ -91,8 +103,9 @@ void Timer::timeGoOn() {
         short days = this->dayInMonth();
         int temp = this->TimePass;
         this->TimePass %= 1000;
-        int passTime = (int) ((temp - this->TimePass) / 1000 * this->Rate);
+        int passTime = (temp - this->TimePass) / 1000;
         this->DateTime[5] += passTime;
+
         // Second
         if (this->DateTime[5] > 59) {
             temp = this->DateTime[5];
@@ -131,12 +144,14 @@ void Timer::run() {
     }
     this->Run = true;
     while (this->Run) {
+        this->lock();
         Sleep(this->UpdateRate);
-        this->TimePass += this->UpdateRate;
+        this->TimePass += this->UpdateRate * this->Rate;
         this->timeGoOn();
         if (this->Debug) {
             std::cout << "[Debug INFO] " << this->timestamp() << std::endl;
         }
+        this->release();
     }
     if (this->Debug) {
         std::cout << "[Debug INFO] Timer stop." << std::endl;
@@ -163,7 +178,6 @@ short Timer::dayInMonth() {
     bool flag = false;
     short day31[7] = {1, 3, 5, 7, 8, 10, 12};
     short year = this->DateTime[0], month = this->DateTime[1], result = 0;
-
     if (month == 2) {
         if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0 && year % 3200 != 0)) {
             result = 29;
@@ -188,27 +202,30 @@ short Timer::dayInMonth() {
 
 std::string Timer::toString() {
     std::ostringstream ostream;
-    ostream << this->getYear() << "/" << this->getMonth() << "/" << this->getDay();
-    ostream << " " << this->getHour() << ":" << this->getMinute() << ":" << this->getSecond();
+    ostream << this->getYear() << "/" << std::setfill('0') << std::setw(2) << this->getMonth() << "/"
+            << std::setfill('0') << std::setw(2) << this->getDay();
+    ostream << " " << std::setfill('0') << std::setw(2) << this->getHour() << ":" << std::setfill('0') << std::setw(2)
+            << this->getMinute() << ":" << std::setfill('0') << std::setw(2) << this->getSecond() << ", Rate: "
+            << this->getRate();
     return ostream.str();
 }
 
 std::string Timer::timestamp() {
     std::ostringstream ostream;
     ostream << this->getYear();
-    if(this->getMonth() < 10)
+    if (this->getMonth() < 10)
         ostream << 0;
     ostream << this->getMonth();
-    if(this->getDay() < 10)
+    if (this->getDay() < 10)
         ostream << 0;
     ostream << this->getDay();
-    if(this->getHour() < 10)
+    if (this->getHour() < 10)
         ostream << 0;
     ostream << this->getHour();
-    if(this->getMinute() < 10)
+    if (this->getMinute() < 10)
         ostream << 0;
     ostream << this->getMinute();
-    if(this->getSecond() < 10)
+    if (this->getSecond() < 10)
         ostream << 0;
     ostream << this->getSecond();
     return ostream.str();

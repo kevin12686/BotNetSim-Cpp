@@ -40,10 +40,10 @@ int main() {
     _thread accept_t((int (*)()) accept_thread);
     accept_t.start();
 
-    Sleep(20000);
+    Sleep(10000);
 
     _socket c((char *) "127.0.0.1", (char *) "1999", 1024);
-    c.send_((char *) "T20180913000201");
+    c.send_((char *) "T20180913000201:1000");
     cout << c.recv_() << endl;
     c.shutdown_(_socket::BOTH);
     c.close_();
@@ -93,7 +93,6 @@ void client_thread() {
     ReleaseMutex(QMutex);
     string s = client->recv_();
     cout << "From " << client->getIPAddr() << " : " << s << endl;
-    client->send_((char *) "Good.");
     client->shutdown_(_socket::BOTH);
     client->close_();
     delete client;

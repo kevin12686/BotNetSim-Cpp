@@ -2,16 +2,17 @@
 #define BOTNETSIM_CPP_THREADING_H
 
 #include <iostream>
+#include <winnt.h>
 
 class Timer {
 public:
     bool Debug = false;
 
-    Timer(float);
+    Timer(int);
 
-    Timer(int *, float);
+    Timer(int *, int);
 
-    Timer(int, int, int, int, int, int, float);
+    Timer(int, int, int, int, int, int, int);
 
     int *getDateTime();
 
@@ -27,6 +28,10 @@ public:
 
     int getSecond();
 
+    void lock();
+
+    void release();
+
     void setDateTime(int *);
 
     void setYear(int);
@@ -41,9 +46,9 @@ public:
 
     void setSecond(int);
 
-    float getRate();
+    int getRate();
 
-    void setRate(float);
+    void setRate(int);
 
     void timeGoOn();
 
@@ -70,8 +75,9 @@ private:
     int TimePass = 0;
     // UpdateRate (mini second)
     short UpdateRate = 100;
-    float Rate;
+    int Rate;
     bool Run;
+    HANDLE time_mutex;
 };
 
 #endif //BOTNETSIM_CPP_THREADING_H
