@@ -18,10 +18,13 @@
 // Max Sensor Per Message
 #define SensorPerMsg 50
 #define ServentPerClient 5
+// ?% Become Servent Bot
+#define Sevent_Bot_Persent 10
 // ?% Become Check Bot
 #define Check_Bot_Persent 30
+
 #define Keep_Spreading_Setting false
-#define Reserved_Host 1000
+#define Reserved_Host 0
 
 #define doc_name "Record.csv"
 #define record_rate 1000
@@ -104,7 +107,7 @@ string msg_token[] = {"ChangeCheckBot", "Promotion", "Request", "HOST", "CTRL", 
 
 // Global Variables
 // init
-Timer v_t(100.0);
+Timer v_t(100);
 chrono::steady_clock::time_point start_time;
 pthread_mutex_t action_lock = PTHREAD_MUTEX_INITIALIZER, data_lock = PTHREAD_MUTEX_INITIALIZER, ban_lock = PTHREAD_MUTEX_INITIALIZER;
 set<HOST *, HOSTPtrComp> host_set;
@@ -559,7 +562,7 @@ void *virtual_broadcast(LPVOID console) {
                 client.close_();
             }
         }
-        for (int i = 0; i < TSD; i += 200) {
+        for (int i = 0; i < TSD && *console_on; i += 200) {
             if (i + 200 > TSD) {
                 Sleep(TSD - i);
             } else {
@@ -580,7 +583,7 @@ void *bot_spreading(LPVOID console) {
     int time_pass = 0;
     int temp = 0;
     while (*console_on) {
-        if (letgo && spreading_flag && Keep_Spreading_Setting) {
+        if (letgo && spreading_flag ) {
             time_pass += TSD * v_t.getRate();
             if (time_pass >= GROWRATE * 60000 && host_set.size() > GROWT && host_set.size() > GROWNUM) {
                 temp = time_pass / GROWRATE / 60000;
@@ -602,7 +605,7 @@ void *bot_spreading(LPVOID console) {
                     }
                 }
             }
-        } else if (host_set.size() > GROWT && spreading_flag) {
+        } else if (host_set.size() > GROWT && !letgo) {
             letgo = true;
             if (show_debug_msg) {
                 printf("[INFO] Spreading Wait Lock.\n");
@@ -865,7 +868,7 @@ vector<string> split(const string &str, char delimiter) {
 // Random Delay Bot
 int delay_choose() {
     int random = rand() % 100;
-    return random < 10 ? 0 : 1;
+    return random < Sevent_Bot_Persent ? 0 : 1;
 }
 
 // Check Bot & Sleep Bot Selection
@@ -1020,7 +1023,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 create = new HOST;
                 create->ip = arr.at(0);
                 create->port = arr.at(1);
-                if (host_set.size() < Reserved_Host || first_spreading_flag || Keep_Spreading_Setting) {
+                if (host_set.size() < Reserved_Host || !first_spreading_flag || Keep_Spreading_Setting) {
                     if (client->send_((char *) "OK") == -1) {
                         printf("[Warning] Host %s:%s Register Failed.\n", (create->ip).c_str(), (create->port).c_str());
                     } else {
