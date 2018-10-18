@@ -20,6 +20,8 @@
 #define ServentPerClient 5
 // ?% Become Check Bot
 #define Check_Bot_Persent 30
+#define Keep_Spreading_Setting false
+#define Reserved_Host 1000
 
 #define doc_name "Record.csv"
 #define record_rate 1000
@@ -93,6 +95,8 @@ int PLSIZE = 3;
 bool time_flag = true;
 // Spreading Bot
 bool spreading_flag = false;
+// Spreading Bot
+bool first_spreading_flag = false;
 // Time Spreading Delay(mini seconds-RT)
 short TSD = 500;
 // MsgType Define
@@ -576,14 +580,14 @@ void *bot_spreading(LPVOID console) {
     int time_pass = 0;
     int temp = 0;
     while (*console_on) {
-        if (letgo && spreading_flag) {
-            time_pass += (int) (TSD * v_t.getRate());
+        if (letgo && spreading_flag && Keep_Spreading_Setting) {
+            time_pass += TSD * v_t.getRate();
             if (time_pass >= GROWRATE * 60000 && host_set.size() > GROWT && host_set.size() > GROWNUM) {
                 temp = time_pass / GROWRATE / 60000;
                 time_pass %= GROWRATE * 60000;
                 // Do it one time
                 temp = 1;
-                for (int i = 0; i < temp && *console_on; i++) {
+                for (int i = 0; i < temp && *console_on && spreading_flag; i++) {
                     if (show_debug_msg) {
                         printf("[INFO] Spreading Wait Lock.\n");
                     }
@@ -609,6 +613,7 @@ void *bot_spreading(LPVOID console) {
             }
             printf("[INFO] Starting Inflection.\n");
             servent_first_infection(console_on);
+            first_spreading_flag = true;
             pthread_mutex_unlock(&action_lock);
             if (show_debug_msg) {
                 printf("[INFO] Spreading Release Lock.\n");
@@ -825,12 +830,12 @@ void *ban_broadcast(LPVOID console_on) {
                 if (client.get_status()) {
                     string time_msg = ban_queue.front();
                     if (client.send_((char *) time_msg.c_str()) == -1) {
-                        printf("[Warning] Controler %s:%s Time Broadcast Failed.\n", ((*it_i)->ip).c_str(),
+                        printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
                                ((*it_i)->port).c_str());
                     }
                     client.shutdown_(_socket::BOTH);
                 } else {
-                    printf("[Warning] Controler %s:%s Time Broadcast Failed.\n", ((*it_i)->ip).c_str(),
+                    printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
                            ((*it_i)->port).c_str());
                 }
                 client.close_();
@@ -887,7 +892,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
     if (msg_type_no < 0)
         printf("[Warning] Message Token Invalid. Msg: %s\n", msg_data.c_str());
     else {
-        int random_num, psize;
+        int random_num, psize, delay;
         string output;
         msg_data.assign(msg_data, msg_token[msg_type_no].length(), msg_data.length() - msg_token[msg_type_no].length());
         switch (msg_type_no) {
@@ -1015,11 +1020,68 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 create = new HOST;
                 create->ip = arr.at(0);
                 create->port = arr.at(1);
-                pthread_mutex_lock(&data_lock);
-                host_set.insert(create);
-                pthread_mutex_unlock(&data_lock);
-                if (client->send_((char *) "OK") == -1) {
-                    printf("[Warning] Host %s:%s Register Failed.\n", (create->ip).c_str(), (create->port).c_str());
+                if (host_set.size() < Reserved_Host || first_spreading_flag || Keep_Spreading_Setting) {
+                    if (client->send_((char *) "OK") == -1) {
+                        printf("[Warning] Host %s:%s Register Failed.\n", (create->ip).c_str(), (create->port).c_str());
+                    } else {
+                        pthread_mutex_lock(&data_lock);
+                        host_set.insert(create);
+                        pthread_mutex_unlock(&data_lock);
+                    }
+                } else {
+                    set<HOST *, HOSTPtrComp> random_list;
+                    delay = delay_choose();
+                    if (delay == 0) {
+                        output = "Change:ServentBot";
+                        set<HOST *, HOSTPtrComp> my_list(servent_bot_set.begin(), servent_bot_set.end());
+                        set<HOST *, HOSTPtrComp>::iterator it_find = my_list.find(create);
+                        if (it_find != my_list.end() && it_find != my_list.end()) {
+                            my_list.erase(it_find);
+                        }
+                        set<HOST *, HOSTPtrComp>::iterator bot_i;
+                        while (random_list.size() < PLSIZE) {
+                            random_num = (rand() * rand()) % my_list.size();
+                            bot_i = my_list.begin();
+                            advance(bot_i, random_num);
+                            random_list.insert(*bot_i);
+                            my_list.erase(bot_i);
+                        }
+                        for (auto host : random_list) {
+                            output += ":" + host->ip + ":" + host->port;
+                        }
+                        if (show_debug_msg) {
+                            printf("[INFO] Sending PeerList...(%s)\n", output.c_str());
+                        }
+
+                    } else {
+                        output = "Change:ClientBot";
+
+                        set<HOST *, HOSTPtrComp>::iterator servent_i;
+                        while (random_list.size() < (servent_bot_set.size() > ServentPerClient ? ServentPerClient
+                                                                                               : servent_bot_set.size())) {
+                            random_num = (rand() * rand()) % servent_bot_set.size();
+                            servent_i = servent_bot_set.begin();
+                            advance(servent_i, random_num);
+                            random_list.insert(*servent_i);
+                        }
+
+                        for (auto host : random_list) {
+                            output += ":" + host->ip + ":" + host->port;
+                        }
+                        if (show_debug_msg) {
+                            printf("[INFO] Sending ServentList...(%s)\n", output.c_str());
+                        }
+
+                    }
+                    if (client->send_((char *) output.c_str()) == -1) {
+                        printf("[Warning] HOST %s:%s Register Change Bot Failed.\n", (create->ip).c_str(), (create->port).c_str());
+                    } else {
+                        pthread_mutex_lock(&data_lock);
+                        bot_set.insert(create);
+                        if (delay == 0)
+                            servent_bot_set.insert(create);
+                        pthread_mutex_unlock(&data_lock);
+                    }
                 }
                 break;
 
@@ -1038,7 +1100,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
             case 5:
                 break;
 
-                // R
+                // Ban
             case 6:
                 arr = split(msg_data, ':');
                 create = new HOST;
