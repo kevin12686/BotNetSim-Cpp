@@ -24,7 +24,7 @@
 #define Check_Bot_Persent 30
 
 #define Keep_Spreading_Setting false
-#define Reserved_Host 0
+#define Reserved_Host 500
 
 #define doc_name "Record.csv"
 #define record_rate 1000
