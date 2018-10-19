@@ -57,6 +57,8 @@ void *handle_client(LPVOID);
 // Sending Virtual Time To Controler
 void *virtual_broadcast(LPVOID);
 
+void *handle_virtual_broadcast(LPVOID);
+
 // Spreading Bot
 void *bot_spreading(LPVOID);
 
@@ -103,7 +105,7 @@ bool first_spreading_flag = false;
 // Time Spreading Delay(mini seconds-RT)
 short TSD = 500;
 // MsgType Define
-string msg_token[] = {"ChangeCheckBot", "Promotion", "Request", "HOST", "CTRL", "EXIT", "Ban:", "R"};
+string msg_token[] = {"ChangeCheckBot", "Promotion", "Request", "HOST", "CTRL", "EXIT", "Ban:", "R", "T"};
 
 // Global Variables
 // init
@@ -129,7 +131,7 @@ int main() {
     v_t.setUpdateRate(TSD);
 
     int result = 0;
-    pthread_t timer, record_t, server, time_broadcast, spreading, ban;
+    pthread_t timer, record_t, server, spreading, ban;
     vector<pthread_t> thread_handle;
 
     // main
@@ -174,18 +176,6 @@ int main() {
         return 1;
     }
 
-    // virtual_broadcast
-    result = pthread_create(&time_broadcast, NULL, virtual_broadcast, (LPVOID) &console_on);
-    if (result) {
-        printf("[Error] Time Broadcasting Unable To Start.\n");
-        console_on = false;
-        pthread_join(server, NULL);
-        pthread_join(record_t, NULL);
-        v_t.stop();
-        pthread_join(timer, NULL);
-        return 1;
-    }
-
     // bot_spreading
     result = pthread_create(&spreading, NULL, bot_spreading, (LPVOID) &console_on);
     if (result) {
@@ -193,7 +183,6 @@ int main() {
         console_on = false;
         pthread_join(server, NULL);
         pthread_join(record_t, NULL);
-        pthread_join(time_broadcast, NULL);
         v_t.stop();
         pthread_join(timer, NULL);
         return 1;
@@ -206,7 +195,6 @@ int main() {
         pthread_join(server, NULL);
         pthread_join(spreading, NULL);
         pthread_join(record_t, NULL);
-        pthread_join(time_broadcast, NULL);
         v_t.stop();
         pthread_join(timer, NULL);
         return 1;
@@ -299,6 +287,13 @@ int main() {
             int rate;
             scanf("%d", &rate);
             v_t.setRate(rate);
+            pthread_t t;
+            result = pthread_create(&t, NULL, virtual_broadcast, (LPVOID) &console_on);
+            if (!result) {
+                thread_handle.push_back(t);
+            } else {
+                printf("[Error] Create Pthread Failed.\n");
+            }
         } else if (UserCommand == "set_update_rate") {
             printf("Update Rate: ");
             scanf("%d", &TSD);
@@ -382,7 +377,6 @@ int main() {
     pthread_join(server, NULL);
     pthread_join(spreading, NULL);
     pthread_join(ban, NULL);
-    pthread_join(time_broadcast, NULL);
     v_t.stop();
     pthread_join(timer, NULL);
     for (auto i : thread_handle) {
@@ -541,36 +535,60 @@ void *handle_client(LPVOID s) {
 }
 
 void *virtual_broadcast(LPVOID console) {
-    printf("[INFO] Time Broadcast Thread Started.\n");
     bool *console_on = (bool *) console;
-    while (*console_on) {
-        set<HOST *, HOSTPtrComp>::iterator it_i;
-        if (time_flag && !controler_set.empty()) {
-            for (it_i = controler_set.begin(); it_i != controler_set.end() && *console_on; it_i++) {
-                _socket client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(), BUFSIZE);
-                if (client.get_status()) {
-                    string time_msg = "T" + v_t.timestamp() + ":" + to_string(v_t.getRate());
-                    if (client.send_((char *) time_msg.c_str()) == -1) {
-                        printf("[Warning] Controler %s:%s Time Broadcast Failed.\n", ((*it_i)->ip).c_str(),
-                               ((*it_i)->port).c_str());
-                    }
-                    client.shutdown_(_socket::BOTH);
-                } else {
-                    printf("[Warning] Controler %s:%s Time Broadcast Failed.\n", ((*it_i)->ip).c_str(),
-                           ((*it_i)->port).c_str());
-                }
-                client.close_();
+    vector<pthread_t> thread_vector;
+    pthread_t t;
+    unsigned char fault_count;
+    int result;
+    pair<bool *, HOST *> *data;
+    for (auto i : controler_set) {
+        fault_count = 0;
+        data = new pair<bool *, HOST *>(console_on, i);
+        do {
+            result = pthread_create(&t, NULL, handle_virtual_broadcast,
+                                    (LPVOID) data);
+            if (result) {
+                fault_count++;
             }
-        }
-        for (int i = 0; i < TSD && *console_on; i += 200) {
-            if (i + 200 > TSD) {
-                Sleep(TSD - i);
-            } else {
-                Sleep(200);
-            }
+        } while (result && fault_count < 3);
+        if (result) {
+            delete data;
         }
     }
-    printf("[INFO] Time Broadcast Thread Stop.\n");
+    for (auto i : thread_vector) {
+        pthread_join(i, NULL);
+    }
+    pthread_exit(NULL);
+    return NULL;
+}
+
+void *handle_virtual_broadcast(LPVOID args) {
+    pair<bool *, HOST *> *data = (pair<bool *, HOST *> *) args;
+    bool *console_on = data->first;
+    HOST *host = data->second;
+    unsigned char fault_count = 0;
+    bool send_success = false;
+    string send_data;
+    do {
+        send_data = "T" + v_t.timestamp() + ":" + to_string(v_t.getRate());
+        _socket client((char *) (host->ip).c_str(), (char *) (host->port).c_str(), BUFSIZE);
+        if (client.get_status()) {
+            if (client.send_((char *) send_data.c_str()) != -1) {
+                send_success = true;
+            } else {
+                fault_count++;
+            }
+        } else {
+            fault_count++;
+        }
+        client.shutdown_(_socket::BOTH);
+        client.close_();
+    } while (!(*console_on) && fault_count < 3 && !send_success);
+    if (!send_success) {
+        printf("[Warning] CTRL %s:%s Time Sending Failed (Fault Count: %d).\n", (host->ip).c_str(),
+               (host->port).c_str(), fault_count);
+    }
+    delete data;
     pthread_exit(NULL);
     return NULL;
 }
@@ -583,7 +601,7 @@ void *bot_spreading(LPVOID console) {
     int time_pass = 0;
     int temp = 0;
     while (*console_on) {
-        if (letgo && spreading_flag ) {
+        if (letgo && spreading_flag) {
             time_pass += TSD * v_t.getRate();
             if (time_pass >= GROWRATE * 60000 && host_set.size() > GROWT && host_set.size() > GROWNUM) {
                 temp = time_pass / GROWRATE / 60000;
@@ -900,7 +918,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
         msg_data.assign(msg_data, msg_token[msg_type_no].length(), msg_data.length() - msg_token[msg_type_no].length());
         switch (msg_type_no) {
             // ChangeCheckBot
-            case 0:
+            case 0: {
                 arr = split(msg_data, ':');
                 for (auto i:servent_bot_set) {
                     if (i->ip == arr.at(0) && i->port == arr.at(1)) {
@@ -912,9 +930,10 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     }
                 }
                 break;
+            }
 
                 // Promotion
-            case 1:
+            case 1: {
                 arr = split(msg_data, ':');
                 if (promotion_choose() == 0) {
                     // Check Bot
@@ -939,9 +958,10 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     }
                 }
                 break;
+            }
 
                 // Request
-            case 2:
+            case 2: {
                 msg_data.assign(msg_data, 1, msg_data.length() - 1);
                 if (true) {
                     set<HOST *, HOSTPtrComp> random_list;
@@ -1016,9 +1036,10 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     }
                 }
                 break;
+            }
 
                 // HOST
-            case 3:
+            case 3: {
                 arr = split(msg_data, ':');
                 create = new HOST;
                 create->ip = arr.at(0);
@@ -1077,7 +1098,8 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
 
                     }
                     if (client->send_((char *) output.c_str()) == -1) {
-                        printf("[Warning] HOST %s:%s Register Change Bot Failed.\n", (create->ip).c_str(), (create->port).c_str());
+                        printf("[Warning] HOST %s:%s Register Change Bot Failed.\n", (create->ip).c_str(),
+                               (create->port).c_str());
                     } else {
                         pthread_mutex_lock(&data_lock);
                         bot_set.insert(create);
@@ -1087,9 +1109,10 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     }
                 }
                 break;
+            }
 
                 // CTRL
-            case 4:
+            case 4: {
                 arr = split(msg_data, ':');
                 create = new HOST;
                 create->ip = arr.at(0);
@@ -1098,13 +1121,14 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 controler_set.insert(create);
                 pthread_mutex_unlock(&data_lock);
                 break;
+            }
 
                 // EXIT
             case 5:
                 break;
 
                 // Ban
-            case 6:
+            case 6: {
                 arr = split(msg_data, ':');
                 create = new HOST;
                 create->ip = arr.at(0);
@@ -1117,9 +1141,10 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     pthread_mutex_unlock(&ban_lock);
                 }
                 break;
+            }
 
                 // R
-            case 7:
+            case 7: {
                 vector<string> ip_arr;
                 arr = split(msg_data, '#');
                 arr.erase(arr.begin());
@@ -1130,6 +1155,19 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     create->port = ip_arr.at(1);
                     getcha_set.insert(create);
                 }
+                break;
+            }
+
+                // T
+            case 8: {
+                output = "T" + v_t.timestamp() + ":" + to_string(v_t.getRate());
+                if (client->send_((char *) output.c_str()) == -1) {
+                    printf("[Warning] CTRL Require Timestamp Failed.\n");
+                }
+                break;
+            }
+
+            default:
                 break;
         }
     }
