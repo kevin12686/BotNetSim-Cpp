@@ -225,6 +225,13 @@ int main(int argc, char *argv[]) {
     WaitForSingleObject(report_t.handle, INFINITE);
     CloseHandle(report_t.handle);
 
+    WaitForSingleObject(request_t.handle, INFINITE);
+    CloseHandle(request_t.handle);
+
+    v_t.stop();
+    WaitForSingleObject(timer.handle, INFINITE);
+    CloseHandle(timer.handle);
+
     delete listenSocket;
 
     return 0;
