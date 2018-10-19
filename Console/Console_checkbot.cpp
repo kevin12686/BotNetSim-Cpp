@@ -16,7 +16,7 @@
 // Mini Seconds
 #define IDLE 1000
 // Max Sensor Per Message
-#define SensorPerMsg 50
+#define SensorPerMsg 45
 #define ServentPerClient 5
 // ?% Become Servent Bot
 #define Sevent_Bot_Persent 10
