@@ -46,6 +46,9 @@ ostringstream calculate_time(char *);
 Timer v_t(100);
 chrono::steady_clock::time_point start_time;
 HANDLE date_lock;
+HANDLE suspect_lock;
+HANDLE bot_lock;
+
 
 vector<char *> suspect;
 vector<char *> host;
@@ -320,18 +323,40 @@ void messageHandle(LPVOID s) {
 
     } else if (msg_type == 'R') {
         // get report from Crawler and Sensor
+        WaitForSingleObject(suspect_lock, INFINITE);
         char *suspect_ip = (char *) calloc(22, sizeof(char));
         memcpy(suspect_ip, &message[1], strlen(message) - 1);
         // append to suspect vector
         suspect.push_back(suspect_ip);
+        ReleaseMutex(suspect_lock);
 
     } else if (msg_type == 'S') {
         // host Register
+        WaitForSingleObject(bot_lock, INFINITE);
+        if(message[1] == 'W') {
+            cout << "[BroadCast] " << message << endl;
+            for (short i = 0; i < host.size(); i++) {
+                _socket sConnect(LOCAL_IP_ADDRESS, host[i], 1024);
+                sConnect.send_(message);
+                sConnect.close_();
+            }
+        }
         char *host_port = (char *) calloc(6, sizeof(char));
         memcpy(host_port, &message[1], strlen(message) - 1);
         host.push_back(host_port);
+        ReleaseMutex(bot_lock);
         clientS->send_((char *) "OK");
 
+    } else {
+        WaitForSingleObject(bot_lock, INFINITE);
+        cout << "[BroadCast] " << message << endl;
+        for (short i = 0; i < host.size(); i++) {
+            _socket sConnect(LOCAL_IP_ADDRESS, host[i], 1024);
+            sConnect.send_(message);
+            sConnect.close_();
+        }
+
+        ReleaseMutex(bot_lock);
     }
 
     clientS->close_();
@@ -344,6 +369,7 @@ void report() {
     while (server_status) {
         if (!suspect.empty()) {
             // report
+            WaitForSingleObject(suspect_lock, INFINITE);
             _socket s(CONSOLE_IP_ADDRESS, (char *) "6666", 1024);
 
             int send_q = 0;
@@ -361,6 +387,8 @@ void report() {
             strcpy(cstr, msg.c_str());
             s.send_(cstr);
             s.close_();
+
+            ReleaseMutex(suspect_lock);
 
         }
         Sleep(REPORT_INTERVALS * 1000);
@@ -539,9 +567,44 @@ void setDateTime() {
 
 void requestDateTime() {
     while (server_status) {
-
         _socket s(CONSOLE_IP_ADDRESS, (char *) "6666", 1024);
-        s.send_((char *) "T");
+        if (s.send_((char *) "T") != -1) {
+
+            char *message = nullptr;
+            message = s.recv_();
+
+            v_t.lock();
+
+            cout << "[Message] Update DateTime: " << message << endl;
+            char *TIMESTAMP = new char[23]{0};
+            strncpy(TIMESTAMP, (char *) calculate_time(message).str().c_str(), strlen(message));
+            char year[5] = {0};
+            char month[3] = {0};
+            char day[3] = {0};
+            char hour[3] = {0};
+            char min[3] = {0};
+            char sec[3] = {0};
+            char rate[5] = {0};
+
+            memcpy(year, &TIMESTAMP[0], 4);
+            memcpy(month, &TIMESTAMP[4], 2);
+            memcpy(day, &TIMESTAMP[6], 2);
+            memcpy(hour, &TIMESTAMP[8], 2);
+            memcpy(min, &TIMESTAMP[10], 2);
+            memcpy(sec, &TIMESTAMP[12], 2);
+            strcpy(rate, &TIMESTAMP[15]);
+
+            v_t.setYear(std::atoi(year));
+            v_t.setMonth(std::atoi(month));
+            v_t.setDay(std::atoi(day));
+            v_t.setHour(std::atoi(hour));
+            v_t.setMinute(std::atoi(min));
+            v_t.setSecond(std::atoi(sec));
+            v_t.setRate(std::atoi(rate));
+
+            v_t.release();
+
+        }
         s.close_();
 
         Sleep(REQUEST_DATETIME_INTERVALS * 1000);
