@@ -19,9 +19,10 @@
 #define SensorPerMsg 45
 #define ServentPerClient 5
 // ?% Become Servent Bot
-#define Sevent_Bot_Persent 10
+#define Sevent_Bot_Persent 30
 // ?% Become Check Bot
 #define Check_Bot_Persent 30
+#define Sleep_Bot_Persent 10
 
 #define Keep_Spreading_Setting false
 #define Reserved_Host 500
@@ -59,6 +60,8 @@ void *virtual_broadcast(LPVOID);
 
 void *handle_virtual_broadcast(LPVOID);
 
+void *change_peerlist(LPVOID);
+
 // Spreading Bot
 void *bot_spreading(LPVOID);
 
@@ -89,11 +92,11 @@ bool show_debug_msg = false;
 // Growing rate(minutes-VT)
 int GROWRATE = 60;
 // Growing Number
-int GROWNUM = 10;
+int GROWNUM = 20;
 // Start Growing Threshold
-int GROWT = 10;
+int GROWT = 30;
 // Initial PeerList Size
-int PLSIZE = 3;
+int PLSIZE = 10;
 // Sending Virtual Time
 bool time_flag = true;
 // Spreading Bot
@@ -120,9 +123,15 @@ set<HOST *, HOSTPtrComp> sensor_set;
 set<HOST *, HOSTPtrComp> controler_set;
 set<HOST *, HOSTPtrComp> getcha_set;
 set<HOST *, HOSTPtrComp> ban_set;
+set<HOST *, HOSTPtrComp> ban_sensor_set;
 
 int main() {
     // init
+    if (GROWNUM <= PLSIZE || GROWT < GROWNUM) {
+        printf("[Error] Setting Error.\n");
+        return 1;
+    }
+
     start_time = chrono::steady_clock::now();
     v_t.setUpdateRate(TSD);
 
@@ -200,7 +209,7 @@ int main() {
     printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
     printf("add_crawler : Add Crawler\nsend_time: Toggle Time Sending\n");
     printf("change_bot_num : Show change_bot Number\nset_change_bot_num: Set change_bot Number\n");
-    printf("debug : Show debug message\nspreading: Toggle Spreading\n");
+    printf("debug : Show debug message\nspreading: Toggle Spreading\nswap: Change Peerlist\n");
     string UserCommand = "";
     while (UserCommand != "quit") {
         cin >> UserCommand;
@@ -260,10 +269,10 @@ int main() {
                 printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
             }
         } else if (UserCommand == "global") {
-            printf("Host Number: %d\nBot Number: %d\nSevent_Bot Number: %d\nSleep_Bot Number: %d\nCheck_Bot Number: %d\nControler Number: %d\nCrawler Number: %d\nSensor Number: %d\nGetcha Number: %d\nBan Number: %d\n",
+            printf("Host Number: %d\nBot Number: %d\nSevent_Bot Number: %d\nSleep_Bot Number: %d\nCheck_Bot Number: %d\nControler Number: %d\nCrawler Number: %d\nSensor Number: %d\nGetcha Number: %d\nBan Number: %d\nBan Sensor Number: %d\n",
                    host_set.size(), bot_set.size(), servent_bot_set.size(), sleep_bot_set.size(), check_bot_set.size(),
                    controler_set.size(), crawler_set.size(), sensor_set.size(),
-                   getcha_set.size(), ban_set.size());
+                   getcha_set.size(), ban_set.size(), ban_sensor_set.size());
         } else if (UserCommand == "timestamp") {
             printf("timestamp: %s\n", v_t.timestamp().c_str());
         } else if (UserCommand == "set_time_rate") {
@@ -340,6 +349,14 @@ int main() {
                 show_debug_msg = true;
             }
             printf("debug: %s\n", show_debug_msg ? "True" : "False");
+        } else if (UserCommand == "swap") {
+            pthread_t t;
+            result = pthread_create(&t, NULL, change_peerlist, (LPVOID) &console_on);
+            if (!result) {
+                thread_handle.push_back(t);
+            } else {
+                printf("[Error] Create Pthread Failed.\n");
+            }
         } else {
             printf("quit : Stop the Application\ntime_rate : Get Current Time Rate\n");
             printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
@@ -352,7 +369,7 @@ int main() {
             printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
             printf("add_crawler : Add Crawler\nsend_time: Toggle Time Sending\n");
             printf("change_bot_num : Show change_bot Number\nset_change_bot_num: Set change_bot Number\n");
-            printf("debug : Show debug message\nspreading: Toggle Spreading\n");
+            printf("debug : Show debug message\nspreading: Toggle Spreading\nswap: Change Peerlist\n");
         }
     }
 
@@ -405,6 +422,7 @@ int main() {
             delete *it_i;
         }
     }
+    ban_sensor_set.clear();
     servent_bot_set.clear();
 }
 
@@ -414,13 +432,15 @@ void *record(LPVOID console_on) {
     ofstream record;
     record.open(doc_name);
     record
-            << "timestamp, host number, bot number, servent number, client number, sleep number, check number, senser number, crawler number, getcha number, ban number"
+            << "timestamp, host number, bot number, servent number, client number, sleep number, check number, senser number, crawler number, getcha number, ban number, ban sensor number"
             << endl;
     while (*console) {
         record << v_t.timestamp() << ", " << host_set.size() << ", " << bot_set.size() << ", " << servent_bot_set.size()
                << ", " << bot_set.size() - servent_bot_set.size() - sleep_bot_set.size() << ", " << sleep_bot_set.size()
                << ", " << check_bot_set.size() << ", " << sensor_set.size()
-               << ", " << crawler_set.size() << ", " << getcha_set.size() << ", " << ban_set.size() << endl;
+               << ", " << crawler_set.size() << ", " << getcha_set.size() << ", " << ban_set.size() << ", "
+               << ban_sensor_set.size() << endl;
+        record.flush();
         Sleep(record_rate);
     }
     record.close();
@@ -447,7 +467,6 @@ void *server_accept(LPVOID console) {
             if (server.check_connect_(500)) {
                 _socket *client = server.accept_();
                 if (client) {
-                    //MyThread *temp = new MyThread;
                     int result = 0;
                     pthread_t *temp = new pthread_t;
                     result = pthread_create(temp, NULL, handle_client, (LPVOID) client);
@@ -536,6 +555,8 @@ void *virtual_broadcast(LPVOID console) {
         } while (result && fault_count < 3);
         if (result) {
             delete data;
+        } else {
+            thread_vector.push_back(t);
         }
     }
     for (auto i : thread_vector) {
@@ -576,6 +597,30 @@ void *handle_virtual_broadcast(LPVOID args) {
     return NULL;
 }
 
+void *change_peerlist(LPVOID console) {
+    bool *console_on = (bool *) console;
+    for (auto i : controler_set) {
+        if (*console_on) {
+            _socket client((char *) (i->ip).c_str(), (char *) (i->port).c_str(), BUFSIZE);
+            if (client.get_status()) {
+                if (client.send_((char *) "SWAP") == -1) {
+                    printf("[Warning] CTRL %s:%s SWAP Failed.\n", (i->ip).c_str(),
+                           (i->port).c_str());
+                }
+            } else {
+                printf("[Warning] CTRL %s:%s SWAP Failed.\n", (i->ip).c_str(),
+                       (i->port).c_str());
+            }
+            client.shutdown_(_socket::BOTH);
+            client.close_();
+        } else {
+            break;
+        }
+    }
+    pthread_exit(NULL);
+    return NULL;
+}
+
 void *bot_spreading(LPVOID console) {
     printf("[INFO] Bot Spreading Thread Started.\n");
     srand(unsigned(chrono::duration_cast<chrono::nanoseconds>(start_time - chrono::steady_clock::now()).count()));
@@ -587,7 +632,7 @@ void *bot_spreading(LPVOID console) {
         if (letgo && spreading_flag) {
             time_pass += TSD * v_t.getRate();
             if (time_pass >= GROWRATE * 60000 && host_set.size() > GROWT && host_set.size() > GROWNUM) {
-                temp = time_pass / GROWRATE / 60000;
+                // temp = time_pass / GROWRATE / 60000;
                 time_pass %= GROWRATE * 60000;
                 // Do it one time
                 temp = 1;
@@ -606,7 +651,7 @@ void *bot_spreading(LPVOID console) {
                     }
                 }
             }
-        } else if (host_set.size() > GROWT && !letgo) {
+        } else if (!host_set.empty() && host_set.size() > GROWT && !letgo) {
             letgo = true;
             if (show_debug_msg) {
                 printf("[INFO] Spreading Wait Lock.\n");
@@ -893,16 +938,23 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     }
                 } else {
                     // Sleep Bot
-                    if (client->send_((char *) ("Change:SleepBot")) == -1) {
-                        printf("[Warning] %s:%s Unable To Become Sleep Bot.\n", arr.at(0).c_str(), arr.at(1).c_str());
+                    if (sleep_bot_set.size() > servent_bot_set.size() * (Sleep_Bot_Persent / 100)) {
+                        if (client->send_((char *) ("NotChange")) == -1) {
+                            printf("[Warning] %s:%s NotChange Send Failed.\n", arr.at(0).c_str(), arr.at(1).c_str());
+                        }
                     } else {
-                        for (auto i:servent_bot_set) {
-                            if (i->ip == arr.at(0) && i->port == arr.at(1)) {
-                                pthread_mutex_lock(&data_lock);
-                                sleep_bot_set.insert(i);
-                                servent_bot_set.erase(servent_bot_set.find(i));
-                                pthread_mutex_unlock(&data_lock);
-                                break;
+                        if (client->send_((char *) ("Change:SleepBot")) == -1) {
+                            printf("[Warning] %s:%s Unable To Become Sleep Bot.\n", arr.at(0).c_str(),
+                                   arr.at(1).c_str());
+                        } else {
+                            for (auto i:servent_bot_set) {
+                                if (i->ip == arr.at(0) && i->port == arr.at(1)) {
+                                    pthread_mutex_lock(&data_lock);
+                                    sleep_bot_set.insert(i);
+                                    servent_bot_set.erase(servent_bot_set.find(i));
+                                    pthread_mutex_unlock(&data_lock);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -918,7 +970,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     if (this_host && msg_data == "Peerlist") {
                         set<HOST *, HOSTPtrComp> my_list(servent_bot_set.begin(), servent_bot_set.end());
                         set<HOST *, HOSTPtrComp>::iterator it_find = my_list.find(this_host);
-                        if (it_find != my_list.end() && it_find != my_list.end()) {
+                        if (it_find != my_list.end() || (it_find == my_list.end() && *it_find == this_host)) {
                             my_list.erase(my_list.find(this_host));
                         }
                         set<HOST *, HOSTPtrComp>::iterator bot_i;
@@ -994,7 +1046,8 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 create = new HOST;
                 create->ip = arr.at(0);
                 create->port = arr.at(1);
-                if (host_set.size() < Reserved_Host || !first_spreading_flag || Keep_Spreading_Setting) {
+                if (host_set.empty() || host_set.size() < Reserved_Host || !first_spreading_flag ||
+                    Keep_Spreading_Setting) {
                     if (client->send_((char *) "OK") == -1) {
                         printf("[Warning] Host %s:%s Register Failed.\n", (create->ip).c_str(), (create->port).c_str());
                     } else {
@@ -1008,10 +1061,6 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     if (delay == 0) {
                         output = "Change:ServentBot";
                         set<HOST *, HOSTPtrComp> my_list(servent_bot_set.begin(), servent_bot_set.end());
-                        set<HOST *, HOSTPtrComp>::iterator it_find = my_list.find(create);
-                        if (it_find != my_list.end() && it_find != my_list.end()) {
-                            my_list.erase(it_find);
-                        }
                         set<HOST *, HOSTPtrComp>::iterator bot_i;
                         while (random_list.size() < PLSIZE) {
                             random_num = (rand() * rand()) % my_list.size();
@@ -1083,27 +1132,36 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 create = new HOST;
                 create->ip = arr.at(0);
                 create->port = arr.at(1);
+                bool sensor_flag = false;
+                for (auto i:sensor_set) {
+                    if (i->ip == create->ip && i->port == create->port) {
+                        sensor_flag = true;
+                        break;
+                    }
+                }
                 pthread_mutex_lock(&ban_lock);
                 psize = ban_set.size();
                 ban_set.insert(create);
+                if (sensor_flag)
+                    ban_sensor_set.insert(create);
                 bool flag = ban_set.size() > psize;
                 pthread_mutex_unlock(&ban_lock);
                 if (flag) {
                     set<HOST *, HOSTPtrComp>::iterator it_i;
                     for (it_i = controler_set.begin(); it_i != controler_set.end(); it_i++) {
-                        _socket client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(), BUFSIZE);
-                        if (client.get_status()) {
+                        _socket sub_client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(), BUFSIZE);
+                        if (sub_client.get_status()) {
                             string ban_msg = "Ban:" + msg_data;
-                            if (client.send_((char *) ban_msg.c_str()) == -1) {
+                            if (sub_client.send_((char *) ban_msg.c_str()) == -1) {
                                 printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
                                        ((*it_i)->port).c_str());
                             }
-                            client.shutdown_(_socket::BOTH);
+                            sub_client.shutdown_(_socket::BOTH);
                         } else {
                             printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
                                    ((*it_i)->port).c_str());
                         }
-                        client.close_();
+                        sub_client.close_();
                     }
                 }
                 break;
@@ -1159,13 +1217,9 @@ int servent_infection(bool *console) {
             advance(host_i, random_num);
             target = *host_i;
             delay = delay_choose();
-            if (delay == 0) {
+            if (delay == 0 && servent_bot_set.size() >= PLSIZE) {
                 send_data = "Change:ServentBot";
                 set<HOST *, HOSTPtrComp> my_list(servent_bot_set.begin(), servent_bot_set.end());
-                set<HOST *, HOSTPtrComp>::iterator it_find = my_list.find(target);
-                if (it_find != my_list.end() && it_find != my_list.end()) {
-                    my_list.erase(my_list.find(target));
-                }
                 set<HOST *, HOSTPtrComp>::iterator bot_i;
                 while (random_list.size() < PLSIZE) {
                     random_num = (rand() * rand()) % my_list.size();
@@ -1244,6 +1298,8 @@ int servent_first_infection(bool *console) {
             if (client->get_status()) {
                 if (client->send_((char *) ("Change:ServentBot")) == -1) {
                     printf("[Warning] HOST %s:%s Change Bot Failed.\n", (target->ip).c_str(), (target->port).c_str());
+                    client->shutdown_(_socket::BOTH);
+                    client->close_();
                     delete client;
                 } else {
                     client_list.push_back(client);
