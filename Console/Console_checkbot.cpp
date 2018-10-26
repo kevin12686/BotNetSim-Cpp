@@ -22,7 +22,7 @@
 #define Sevent_Bot_Persent 30
 // ?% Become Check Bot
 #define Check_Bot_Persent 30
-#define Sleep_Bot_Persent 10
+#define Sleep_Bot_Persent 30
 
 #define Keep_Spreading_Setting false
 #define Reserved_Host 500
@@ -202,7 +202,7 @@ int main() {
     printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
     printf("list_bot : List Bot\nlist_ctrl : List Controler\n");
     printf("list_servent_bot : List Servent_Bot\nlist_sleep_bot : List Sleep_Bot\n");
-    printf("list_check_bot : List Check_Bot\nlist_ban_bot : List Ban_Bot\n");
+    printf("list_check_bot : List Check_Bot\nlist_ban_bot : List Ban_Bot\nlist_ban_sensor : List Ban_Sensor\n");
     printf("list_crawler : List Crawler\nlist_sensor : List Sensor\n");
     printf("list_getcha : List Getcha\nglobal : Global Status\n");
     printf("timestamp : Current Timestamp\nset_time_rate : Set Time Rate\n");
@@ -266,6 +266,11 @@ int main() {
         } else if (UserCommand == "list_ban_bot") {
             printf("Ban Bot List\n");
             for (auto i : ban_set) {
+                printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
+            }
+        } else if (UserCommand == "list_ban_sensor") {
+            printf("Ban Sensor List\n");
+            for (auto i : ban_sensor_set) {
                 printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
             }
         } else if (UserCommand == "global") {
@@ -362,7 +367,7 @@ int main() {
             printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
             printf("list_bot : List Bot\nlist_ctrl : List Controler\n");
             printf("list_servent_bot : List Servent_Bot\nlist_sleep_bot : List Sleep_Bot\n");
-            printf("list_check_bot : List Check_Bot\nlist_ban_bot : List Ban_Bot\n");
+            printf("list_check_bot : List Check_Bot\nlist_ban_bot : List Ban_Bot\nlist_ban_sensor : List Ban_Sensor\n");
             printf("list_crawler : List Crawler\nlist_sensor : List Sensor\n");
             printf("list_getcha : List Getcha\nglobal : Global Status\n");
             printf("timestamp : Current Timestamp\nset_time_rate : Set Time Rate\n");
@@ -884,10 +889,15 @@ int delay_choose() {
     return random < Sevent_Bot_Persent ? 0 : 1;
 }
 
-// Check Bot & Sleep Bot Selection
+// Check Bot & Sleep Bot Selection 0: CheckBot 1:SleepBot 2:NotChange
 int promotion_choose(void) {
     int random = rand() % 100;
-    return random < Check_Bot_Persent ? 0 : 1;
+    if (random < Check_Bot_Persent)
+        return 0;
+    else if (random - Check_Bot_Persent < Sleep_Bot_Persent)
+        return 1;
+    else
+        return 2;
 };
 
 // Classify The Message Type
@@ -930,33 +940,33 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                 // Promotion
             case 1: {
                 arr = split(msg_data, ':');
-                if (promotion_choose() == 0) {
+                int promotion = promotion_choose();
+                if (promotion == 0) {
                     // Check Bot
                     if (client->send_((char *) ("Accumulate")) == -1) {
                         printf("[Warning] Sending %s:%s \"Accumulate\" Failed.\n", arr.at(0).c_str(),
                                arr.at(1).c_str());
                     }
-                } else {
+                } else if (promotion == 1) {
                     // Sleep Bot
-                    if (sleep_bot_set.size() > servent_bot_set.size() * (Sleep_Bot_Persent / 100)) {
-                        if (client->send_((char *) ("NotChange")) == -1) {
-                            printf("[Warning] %s:%s NotChange Send Failed.\n", arr.at(0).c_str(), arr.at(1).c_str());
-                        }
+                    if (client->send_((char *) ("Change:SleepBot")) == -1) {
+                        printf("[Warning] %s:%s Unable To Become Sleep Bot.\n", arr.at(0).c_str(),
+                               arr.at(1).c_str());
                     } else {
-                        if (client->send_((char *) ("Change:SleepBot")) == -1) {
-                            printf("[Warning] %s:%s Unable To Become Sleep Bot.\n", arr.at(0).c_str(),
-                                   arr.at(1).c_str());
-                        } else {
-                            for (auto i:servent_bot_set) {
-                                if (i->ip == arr.at(0) && i->port == arr.at(1)) {
-                                    pthread_mutex_lock(&data_lock);
-                                    sleep_bot_set.insert(i);
-                                    servent_bot_set.erase(servent_bot_set.find(i));
-                                    pthread_mutex_unlock(&data_lock);
-                                    break;
-                                }
+                        for (auto i:servent_bot_set) {
+                            if (i->ip == arr.at(0) && i->port == arr.at(1)) {
+                                pthread_mutex_lock(&data_lock);
+                                sleep_bot_set.insert(i);
+                                servent_bot_set.erase(servent_bot_set.find(i));
+                                pthread_mutex_unlock(&data_lock);
+                                break;
                             }
                         }
+                    }
+                } else {
+                    // NotChange
+                    if (client->send_((char *) ("NotChange")) == -1) {
+                        printf("[Warning] %s:%s NotChange Send Failed.\n", arr.at(0).c_str(), arr.at(1).c_str());
                     }
                 }
                 break;
@@ -975,7 +985,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         }
                         set<HOST *, HOSTPtrComp>::iterator bot_i;
                         output = "Peerlist";
-                        while (random_list.size() < PLSIZE) {
+                        while (random_list.empty() || random_list.size() < PLSIZE) {
                             random_num = (rand() * rand()) % my_list.size();
                             bot_i = my_list.begin();
                             advance(bot_i, random_num);
@@ -996,7 +1006,8 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     } else if (msg_data == "Sensorlist") {
                         set<HOST *, HOSTPtrComp>::iterator sensor_i;
                         output = "Sensorlist";
-                        while (random_list.size() < (sensor_set.size() > SensorPerMsg ? SensorPerMsg
+                        while (random_list.empty() ||
+                               random_list.size() < (sensor_set.size() > SensorPerMsg ? SensorPerMsg
                                                                                       : sensor_set.size())) {
                             random_num = (rand() * rand()) % sensor_set.size();
                             sensor_i = sensor_set.begin();
@@ -1017,7 +1028,8 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     } else if (msg_data == "Serventlist") {
                         set<HOST *, HOSTPtrComp>::iterator servent_i;
                         output = "Serventlist";
-                        while (random_list.size() < (servent_bot_set.size() > ServentPerClient ? ServentPerClient
+                        while (random_list.empty() ||
+                               random_list.size() < (servent_bot_set.size() > ServentPerClient ? ServentPerClient
                                                                                                : servent_bot_set.size())) {
                             random_num = (rand() * rand()) % servent_bot_set.size();
                             servent_i = servent_bot_set.begin();
@@ -1062,7 +1074,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         output = "Change:ServentBot";
                         set<HOST *, HOSTPtrComp> my_list(servent_bot_set.begin(), servent_bot_set.end());
                         set<HOST *, HOSTPtrComp>::iterator bot_i;
-                        while (random_list.size() < PLSIZE) {
+                        while (random_list.empty() || random_list.size() < PLSIZE) {
                             random_num = (rand() * rand()) % my_list.size();
                             bot_i = my_list.begin();
                             advance(bot_i, random_num);
@@ -1080,7 +1092,8 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         output = "Change:ClientBot";
 
                         set<HOST *, HOSTPtrComp>::iterator servent_i;
-                        while (random_list.size() < (servent_bot_set.size() > ServentPerClient ? ServentPerClient
+                        while (random_list.empty() ||
+                               random_list.size() < (servent_bot_set.size() > ServentPerClient ? ServentPerClient
                                                                                                : servent_bot_set.size())) {
                             random_num = (rand() * rand()) % servent_bot_set.size();
                             servent_i = servent_bot_set.begin();
@@ -1209,7 +1222,7 @@ int servent_infection(bool *console) {
     set<HOST *, HOSTPtrComp> random_list;
     HOST *target = NULL;
     string send_data, recv_data;
-    if (host_set.size() > GROWT && host_set.size() > GROWNUM) {
+    if (!host_set.empty() && (host_set.size() > GROWT && host_set.size() > GROWNUM)) {
         printf("[INFO] Infecting...\n");
         for (int i = 0; i < GROWNUM && *console;) {
             random_num = (rand() * rand()) % host_set.size();
@@ -1217,11 +1230,11 @@ int servent_infection(bool *console) {
             advance(host_i, random_num);
             target = *host_i;
             delay = delay_choose();
-            if (delay == 0 && servent_bot_set.size() >= PLSIZE) {
+            if (delay == 0 && !servent_bot_set.empty() && servent_bot_set.size() >= PLSIZE) {
                 send_data = "Change:ServentBot";
                 set<HOST *, HOSTPtrComp> my_list(servent_bot_set.begin(), servent_bot_set.end());
                 set<HOST *, HOSTPtrComp>::iterator bot_i;
-                while (random_list.size() < PLSIZE) {
+                while (random_list.empty() || random_list.size() < PLSIZE) {
                     random_num = (rand() * rand()) % my_list.size();
                     bot_i = my_list.begin();
                     advance(bot_i, random_num);
@@ -1239,7 +1252,8 @@ int servent_infection(bool *console) {
                 send_data = "Change:ClientBot";
 
                 set<HOST *, HOSTPtrComp>::iterator servent_i;
-                while (random_list.size() < (servent_bot_set.size() > ServentPerClient ? ServentPerClient
+                while (random_list.empty() ||
+                       random_list.size() < (servent_bot_set.size() > ServentPerClient ? ServentPerClient
                                                                                        : servent_bot_set.size())) {
                     random_num = (rand() * rand()) % servent_bot_set.size();
                     servent_i = servent_bot_set.begin();
@@ -1287,7 +1301,7 @@ int servent_first_infection(bool *console) {
     vector<_socket *> client_list;
     HOST *target = NULL;
     string recv_data;
-    if (host_set.size() > GROWT && host_set.size() > GROWNUM) {
+    if (!host_set.empty() && (host_set.size() > GROWT && host_set.size() > GROWNUM)) {
         printf("[INFO] Servent Infecting...\n");
         for (int i = 0; i < GROWNUM && *console;) {
             random_num = (rand() * rand()) % host_set.size();
