@@ -5,15 +5,14 @@
 #include "_thread.h"
 #include <mutex>
 #include <tchar.h>
-#include<stdlib.h>
 #include <map>
 
 using namespace std;
 
 typedef struct peerlist {
-    char IP[20];
-    char Port[6];
-    char ddos_time[15];
+    char IP[20] = {};
+    char Port[6] = {};
+    char ddos_time[15] = {};
     int rank = 7;
     bool trust_flag = false;
     bool send_flag = false;
@@ -184,8 +183,8 @@ int main(int argc, char *argv[]) {
 
     _socket::Debug = false;
     // 初始化 Mutex
-    QMutex = CreateMutex(NULL, false, NULL);
-    if (QMutex == NULL) {
+    QMutex = CreateMutex(nullptr, false, nullptr);
+    if (QMutex == nullptr) {
         cout << "CreateMutex Error. ErrorCode=" << GetLastError() << endl;
         return 1;
     }
@@ -1017,12 +1016,12 @@ char handle_recv_mes(char data[]) {
     char output[buffer_size];
     const char *p = ":";
     PeerList p1;
-    memset(p1.IP, '\0', 20);
-    memset(p1.Port, '\0', 6);
+    memset(p1.IP, '\0', sizeof(p1.IP));
+    memset(p1.Port, '\0', sizeof(p1.Port));
     strcpy(output, data);
     buf = strtok(data, p);
-    memset(tar_ip, '\0', 20);
-    memset(tar_port, '\0', 5);
+    memset(tar_ip, '\0', sizeof(tar_ip));
+    memset(tar_port, '\0', sizeof(tar_port));
     if (sleep_status) {       // Sleep Bot
         return 'N';
     }
@@ -1140,10 +1139,10 @@ char handle_recv_mes(char data[]) {
                     while (buf) {
                         count = count % 2;
                         if (count == 0) {
-                            memset(p1.IP, '\0', 20);
+                            memset(p1.IP, '\0', sizeof(p1.IP));
                             strcpy(p1.IP, buf);
                         } else {
-                            memset(p1.Port, '\0', 5);
+                            memset(p1.Port, '\0', sizeof(p1.Port));
                             strcpy(p1.Port, buf);
                             if (find_repeat_list(vec_Peerlist, p1) < 0) // 檢查 對方傳的IP,Port有無重複
                                 vec_Peerlist.push_back(p1);
@@ -1157,10 +1156,10 @@ char handle_recv_mes(char data[]) {
                     while (buf) {
                         count = count % 2;
                         if (count == 0) {
-                            memset(p1.IP, '\0', 20);
+                            memset(p1.IP, '\0', sizeof(p1.IP));
                             strcpy(p1.IP, buf);
                         } else {
-                            memset(p1.Port, '\0', 5);
+                            memset(p1.Port, '\0', sizeof(p1.Port));
                             strcpy(p1.Port, buf);
                             vec_Serventlist.push_back(p1);
                         }
@@ -1565,64 +1564,38 @@ void rebirth() {
 }
 
 void check() {
-    int distrust_num = -1;
     char str[25] = {};
 
-    WaitForSingleObject(untrustlist_lock, INFINITE);    // Lock
-    WaitForSingleObject(peerlist_lock, INFINITE);
+    check_now = true;
+    mapCheck.clear();   // map 清空
 
-    distrust_num = find_min_rank(vec_UnTrustlist);
-    if (distrust_num < 0) {   // UnTrustlist Size = 0
-        distrust_num = find_unTrust(vec_Peerlist);
-        if (distrust_num < 0) {   // UnTrustlist & Peerlist 都找不到低聲譽值
-            ReleaseMutex(untrustlist_lock);     // 先Release才能退出
-            ReleaseMutex(peerlist_lock);
-            return;
-        } else {
-            strcpy(checkTarget.IP, vec_Peerlist[distrust_num].IP);
-            strcpy(checkTarget.Port, vec_Peerlist[distrust_num].Port);
-            checkTarget.rank = vec_Peerlist[distrust_num].rank;
-            vec_Peerlist.erase(vec_Peerlist.begin() + distrust_num);
-        }
-    } else {
-        strcpy(checkTarget.IP, vec_UnTrustlist[distrust_num].IP);
-        strcpy(checkTarget.Port, vec_UnTrustlist[distrust_num].Port);
-        checkTarget.rank = vec_UnTrustlist[distrust_num].rank;
-        vec_UnTrustlist.erase(vec_UnTrustlist.begin() + distrust_num);
+    int untrust_num = find_unTrust(vec_Peerlist);
+    if(untrust_num >= 0){
+        strcat(str, vec_Peerlist[untrust_num].IP);
+        strcat(str, ":");
+        strcat(str, vec_Peerlist[untrust_num].Port);
+        mapCheck[str] = 1;
     }
-    ReleaseMutex(untrustlist_lock); // Release
-    ReleaseMutex(peerlist_lock);
 
-    if (checkTarget.rank < DistrustRank) {
 
-        check_now = true;
-        mapCheck.clear();   // map 清空
+    char send_data[buffer_size] = {};
+    int time_t[6] = {};
+    char time_expire[15] = {};
 
-        strcat(str, checkTarget.IP);
-        strcat(str, checkTarget.Port);
-        mapCheck[str] = checkTarget.rank;
+    time_to_int(time_stamp, time_t); //   [0]年 [1]月 [2]日 [3]時 [4]分 [5]秒
+    add_time(2, 3, time_t);   // 訊息三天過期
+    sprintf(time_expire, "%04d%02d%02d%02d%02d%02d", time_t[0], time_t[1], time_t[2], time_t[3], time_t[4],
+            time_t[5]);
+    add_time(2, 1, time_t);   // 過期後一天回收訊息
+    sprintf(checkTimeExpire, "%04d%02d%02d%02d%02d%02d", time_t[0], time_t[1], time_t[2], time_t[3], time_t[4],
+            time_t[5]);
 
-        char send_data[buffer_size] = {};
-        int time_t[6] = {};
-        char time_expire[15] = {};
-
-        time_to_int(time_stamp, time_t); //   [0]年 [1]月 [2]日 [3]時 [4]分 [5]秒
-        add_time(2, 3, time_t);   // 訊息三天過期
-        sprintf(time_expire, "%04d%02d%02d%02d%02d%02d", time_t[0], time_t[1], time_t[2], time_t[3], time_t[4],
-                time_t[5]);
-        add_time(2, 1, time_t);   // 過期後一天回收訊息
-        sprintf(checkTimeExpire, "%04d%02d%02d%02d%02d%02d", time_t[0], time_t[1], time_t[2], time_t[3], time_t[4],
-                time_t[5]);
-
-        check_num = rand(); // 編號
-        //  格式[ Check:編號:到期時間:檢查目標IP:檢查目標Port:發送端IP:發送端Port ]
-        sprintf(send_data, "%s:%d:%s:%s:%s:%s:%s", "Check", check_num, time_expire, checkTarget.IP,
-                checkTarget.Port, my_ip, my_port);
-        send_check_mes(send_data, true);
-        if (debug_mode)
-            printf("------------------[Start Check No.%d] %s:%s = %d-------------------\n", check_num, checkTarget.IP,
-                   checkTarget.Port, checkTarget.rank);
-    }
+    check_num = rand(); // 編號
+    //  格式[ Check:編號:到期時間t:發送端IP:發送端Port ]
+    sprintf(send_data, "%s:%d:%s:%s:%s", "Check", check_num, time_expire, my_ip, my_port);
+    send_check_mes(send_data, true);
+    if (debug_mode)
+        printf("------------------[Start Check No.%d] -------------------\n", check_num);
 }
 
 void check_bot_report() {
@@ -1708,46 +1681,35 @@ void handle_check_mes(char data[]) {
                 // 時間已過期
                 break;
             case 3:
-                memset(tar.IP, '\0', 20);
-                strcpy(tar.IP, buf);
-                break;
-            case 4:
-                memset(tar.Port, '\0', 6);
-                strcpy(tar.Port, buf);
-                break;
-            case 5:
-                memset(source.IP, '\0', 20);
+                memset(source.IP, '\0', sizeof(source.IP));
                 strcpy(source.IP, buf);
                 break;
-            case 6:
-                memset(source.Port, '\0', 6);
+            case 4:
+                memset(source.Port, '\0', sizeof(source.Port));
                 strcpy(source.Port, buf);
                 break;
         }
         buf = strtok(NULL, p);
         count++;
-        if (count > 6)
+        if (count > 4)
             break;
     }
 
     char str[25] = {};
-    int rank = 0;
 
     count = 0;
     if (check_bot_status && check_flag) {   // 是CheckBot 且訊息編號與正在詢問的相同
         // CheckBot 統計
         while (buf) {
-            if (count % 3 == 0)
-                strcat(str, buf);
-            else if (count % 3 == 1)
-                strcat(str, buf);
-            else {
-                rank = atoi(buf);
-                mapCheck[str] = rank;
-                memset(str, '\0', sizeof(str));
-            }
+            strcat(str, buf);   // IP
+            strcat(str, ":");
             buf = strtok(NULL, p);
-            count++;
+            strcat(str, buf);   // Port
+            if(mapCheck.count(str))
+                mapCheck[str] = mapCheck[str] + 1;
+            else
+                mapCheck[str] = 1;
+            memset(str, '\0', sizeof(str));
         }
     } else {
         // Servent 傳遞
@@ -1755,40 +1717,28 @@ void handle_check_mes(char data[]) {
             buf = strtok(NULL, p);
             count++;
         }
-        count = count / 3;
+        count = count / 2;
         if (expire_flag || count >= 6) {        // 過期 or 滿六筆資料 直接回傳給 Check Bot
             _socket c((char *) source.IP, (char *) source.Port, buffer_size);
-            if (c.get_status()) {
+            if (c.get_status())
                 c.send_(data);
-                //c.shutdown_(_socket::BOTH);
-                c.close_();
-            } else {
-                c.close_();
+            else{
+                if(debug_mode)
+                    printf("[Expire] Connect to CheckBot Failed\n");
             }
+            c.close_();
             return;
         } else {
             // 尋找目標
-            int tar_num = find_repeat_list(vec_UnTrustlist, tar);  // 找 UnTrustlist
-            if (tar_num >= 0)
-                rank = vec_UnTrustlist[tar_num].rank;
-            else {
-                tar_num = find_repeat_list(vec_Peerlist, tar);          // 找 Peerlist
-                if (tar_num >= 0)
-                    rank = vec_Peerlist[tar_num].rank;
-                else {
-                    tar_num = find_repeat_list(vec_Trustlist, tar);         // 找 Trustlist
-                    if (tar_num >= 0)
-                        rank = vec_Trustlist[tar_num].rank;
-                }
+            int untrust_num = find_unTrust(vec_Peerlist);
+            if(untrust_num >= 0){
+                memset(str, '\0', sizeof(str));
+                strcat(str, vec_Peerlist[untrust_num].IP);
+                strcat(str, ":");
+                strcat(str, vec_Peerlist[untrust_num].Port);
+                mapCheck[str] = 1;
             }
-            if (tar_num >= 0) {   // 找到目標
-                char add_mes[20] = {};
-                sprintf(add_mes, ":%s:%s:%d", my_ip, my_port, rank);
-                strcat(data, add_mes); // 加上自己的訊息
-                // 再問別人
-                send_check_mes(data, true);
-            } else
-                send_check_mes(data, true);    // 問兩人
+            send_check_mes(data, true);    // 問兩人
         }
     }
 }
@@ -1804,8 +1754,34 @@ int find_repeat_list(vector<PeerList> vec, PeerList p) {
 }
 
 void send_check_mes(char send_data[], bool write_flag) {
-    int num1 = -1, num2 = -1;
-    if (vec_Trustlist.size() >= 2) {
+    int num1 = 0, num2 = 1;
+    int size = vec_Peerlist.size();
+    int max_rank = 0;
+    num1 = find_max_rank(vec_Peerlist);
+    for (int i = 0; i < size; i++) {
+        if(vec_Peerlist[i].rank > max_rank){
+            if(i != num1){
+                max_rank = vec_Peerlist[i].rank;
+                num2 = i;
+            }
+        }
+    }
+    // 2個都從PeerList詢問
+    _socket c1((char *) vec_Peerlist[num1].IP, (char *) vec_Peerlist[num1].Port, buffer_size);
+    _socket c2((char *) vec_Peerlist[num2].IP, (char *) vec_Peerlist[num2].Port, buffer_size);
+    if (c1.get_status()) {
+        c1.send_(send_data);
+        if (debug_mode)
+            printf("[Send] --> %s:%s [%s]\n", vec_Peerlist[num1].IP, vec_Peerlist[num1].Port, send_data);
+    }
+    c1.close_();
+    if (c2.get_status()) {
+        c2.send_(send_data);
+        if (debug_mode)
+            printf("[Send] --> %s:%s [%s]\n", vec_Peerlist[num2].IP, vec_Peerlist[num2].Port, send_data);
+    }
+    c2.close_();
+    /*if (vec_Trustlist.size() >= 2) {
         // 兩個都從 TrustList 問
         WaitForSingleObject(trustlist_lock, INFINITE);      // Lock
 
@@ -1877,7 +1853,7 @@ void send_check_mes(char send_data[], bool write_flag) {
 
     } else {
         // 至少有一個要是 Trust List
-    }
+    }*/
 }
 
 void dice_hibernate_time() {
