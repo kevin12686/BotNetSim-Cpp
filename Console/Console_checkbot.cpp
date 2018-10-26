@@ -476,9 +476,6 @@ void *server_accept(LPVOID console) {
                     pthread_t *temp = new pthread_t;
                     result = pthread_create(temp, NULL, handle_client, (LPVOID) client);
                     if (!result) {
-                        if (show_debug_msg) {
-                            printf("[INFO] Client Accepted.\n");
-                        }
                         t_v.push_back(temp);
                     }
                 }
@@ -503,9 +500,6 @@ void *server_accept(LPVOID console) {
 
 void *handle_client(LPVOID s) {
     srand(unsigned(chrono::duration_cast<chrono::nanoseconds>(start_time - chrono::steady_clock::now()).count()));
-    if (show_debug_msg) {
-        printf("[INFO] Client Thread Started.\n");
-    }
     _socket *client = (_socket *) s;
     bool recv_loop = true;
 
@@ -534,9 +528,6 @@ void *handle_client(LPVOID s) {
     client->shutdown_(_socket::BOTH);
     client->close_();
     delete client;
-    if (show_debug_msg) {
-        printf("[INFO] Client Thread Stop.\n");
-    }
     pthread_exit(NULL);
     return NULL;
 }
@@ -800,6 +791,7 @@ void *change_sensor(LPVOID console_on) {
         printf("[INFO] Change Sensor Release Lock.\n");
     }
     delete p;
+    printf("[INFO] Change Sensor Finish.\n");
     pthread_exit(NULL);
     return NULL;
 }
@@ -869,6 +861,7 @@ void *change_crawler(LPVOID console_on) {
         printf("[INFO] Change Crawler Release Lock.\n");
     }
     delete p;
+    printf("[INFO] Change Crawler Finish.\n");
     pthread_exit(NULL);
     return NULL;
 }
@@ -1350,6 +1343,7 @@ int servent_first_infection(bool *console) {
         for (auto i : handle) {
             pthread_join(i, NULL);
         }
+        printf("[INFO] Servent Infecting Finish\n");
     }
     return 1;
 }
