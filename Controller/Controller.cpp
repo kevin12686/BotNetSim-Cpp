@@ -24,6 +24,35 @@ typedef struct MYTHREAD {
     DWORD id;
 } MyThread;
 
+HANDLE WINAPI MakeSlot(HANDLE hFile, LPTSTR lpszSlotName) {
+    hFile = CreateFile(lpszSlotName,
+                       GENERIC_WRITE,
+                       FILE_SHARE_READ,
+                       (LPSECURITY_ATTRIBUTES) nullptr,
+                       OPEN_EXISTING,
+                       FILE_ATTRIBUTE_NORMAL,
+                       (HANDLE) nullptr);
+    return hFile;
+
+}
+
+BOOL WriteSlot(HANDLE hSlot, LPTSTR lpszMessage) {
+    BOOL fResult;
+    DWORD cbWritten;
+
+    fResult = WriteFile(hSlot,
+                        lpszMessage,
+                        (DWORD) (lstrlen(lpszMessage) + 1) * sizeof(TCHAR),
+                        &cbWritten,
+                        (LPOVERLAPPED) nullptr);
+
+    if (!fResult) {
+        printf("WriteFile failed with %d.\n", GetLastError());
+        return FALSE;
+    }
+
+    return TRUE;
+}
 
 void socketAccept();
 
@@ -40,6 +69,8 @@ void requestDateTime();
 void setDateTime();
 
 int getMaxDay(int, int);
+
+void BoardCast(char *);
 
 ostringstream calculate_time(char *);
 
@@ -334,28 +365,19 @@ void messageHandle(LPVOID s) {
         // host Register
         WaitForSingleObject(bot_lock, INFINITE);
         if(message[1] == 'W') {
-            cout << "[BroadCast] " << message << endl;
-            for (short i = 0; i < host.size(); i++) {
-                _socket sConnect(LOCAL_IP_ADDRESS, host[i], 1024);
-                sConnect.send_(message);
-                sConnect.close_();
-            }
+            BoardCast(message);
         }
-        char *host_port = (char *) calloc(6, sizeof(char));
-        memcpy(host_port, &message[1], strlen(message) - 1);
-        host.push_back(host_port);
-        ReleaseMutex(bot_lock);
-        clientS->send_((char *) "OK");
+        else {
+            char *host_port = (char *) calloc(6, sizeof(char));
+            memcpy(host_port, &message[1], strlen(message) - 1);
+            host.push_back(host_port);
+            ReleaseMutex(bot_lock);
+            clientS->send_((char *) "OK");
+        }
 
     } else {
         WaitForSingleObject(bot_lock, INFINITE);
-        cout << "[BroadCast] " << message << endl;
-        for (short i = 0; i < host.size(); i++) {
-            _socket sConnect(LOCAL_IP_ADDRESS, host[i], 1024);
-            sConnect.send_(message);
-            sConnect.close_();
-        }
-
+        BoardCast(message);
         ReleaseMutex(bot_lock);
     }
 
@@ -609,4 +631,26 @@ void requestDateTime() {
 
         Sleep(REQUEST_DATETIME_INTERVALS * 1000);
     }
+}
+
+void BoardCast(char *message) {
+
+    WaitForSingleObject(bot_lock, INFINITE);
+    cout << "[BroadCast] " << message << endl;
+    HANDLE hFile;
+
+    for (short i = 0; i < host.size(); i++) {
+        char serverName[100];
+        strcat(serverName, (const char *) "\\\\.\\mailslot\\");
+        strcat(serverName, host[i]);
+        LPTSTR SlotName = TEXT(serverName);
+        hFile = MakeSlot(hFile, SlotName);
+        if (hFile == INVALID_HANDLE_VALUE) {
+            printf("BoardCast to %s Failed.\n", host[i]);
+        }
+        WriteSlot(hFile, message);
+    }
+
+    ReleaseMutex(bot_lock);
+
 }

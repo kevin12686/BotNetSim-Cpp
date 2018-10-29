@@ -1,85 +1,52 @@
-#include <iostream>
-#include <string>
-#include <tchar.h>
 #include "_socket.h"
-#include "_socketserver.h"
+#include <windows.h>
+#include <tchar.h>
+#include <stdio.h>
+#include <strsafe.h>
+#include <iostream>
+#include <sstream>
 
-using namespace std;
+HANDLE hSlot;
+LPTSTR SlotName = TEXT((char*)"\\\\.\\mailslot\\7777");
+char* boardcast;
+char buffer[256];
+DWORD NumberOfBytesRead;
 
-int main() {
+BOOL WINAPI MakeSlot(LPTSTR lpszSlotName)
+{
+    hSlot = CreateMailslot(lpszSlotName,
+                           0,                             // no maximum message size
+                           MAILSLOT_WAIT_FOREVER,         // no time-out for operations
+                           (LPSECURITY_ATTRIBUTES) NULL); // default security
 
+    if (hSlot == INVALID_HANDLE_VALUE)
+    {
+        printf("CreateMailslot failed with %d\n", GetLastError());
+        return FALSE;
+    }
+    return TRUE;
+}
+
+int main()
+{
     WSADATA wsadata;
     _socket::Debug = false;
 
     _socket::wsastartup_(&wsadata);
 
     _socket f((char *) "127.0.0.1", (char *) "1999", 1024);
-    f.send_((char *) "T20180101010101:3445");
-    cout << f.recv_() << endl;
-    f.shutdown_(_socket::BOTH);
+    f.send_((char*) "SS7777");
     f.close_();
 
-
-    _socket s((char *) "127.0.0.1", (char *) "1999", 1024);
-    s.send_((char *) "R127.0.0.1:7777");
-    s.shutdown_(_socket::BOTH);
-    s.close_();
-
-    _socket d((char *) "127.0.0.1", (char *) "1999", 1024);
-    d.send_((char *) "R127.0.0.1:8888");
-    d.shutdown_(_socket::BOTH);
-    d.close_();
-
-    _socket c((char *) "127.0.0.1", (char *) "1999", 1024);
-    c.send_((char *) "R127.0.0.1:9999");
-    c.shutdown_(_socket::BOTH);
-    c.close_();
-
-    _socketserver::Debug = true;
-    _socket::Debug = true;
-
-    HANDLE hFileMap;
-    BOOL bResult;
-    PCHAR lpBuffer = nullptr;
-
-    hFileMap = OpenFileMapping(
-            FILE_MAP_READ,
-            FALSE,
-            _T("BotNetShareDateTime")
-    );
-
-    if (!hFileMap) {
-        printf("OpenFileMapping Failed Error: %d.\n", GetLastError());
-        exit(-1);
-    } else {
-        printf("OpenFileMapping Success!\n");
-    }
-
-    while(TRUE){
-        lpBuffer = (PCHAR) MapViewOfFile(hFileMap, FILE_MAP_READ, 0, 0, 256);
-
-        if (lpBuffer == nullptr) {
-            printf("MapViewOfFile Failed Error: %d.\n", GetLastError());
-            break;
-        } else {
-            printf("MapViewOfFile Success!\n");
+    MakeSlot(SlotName);
+    bool FLAG = TRUE;
+    while(FLAG)
+    {
+        if(ReadFile(hSlot, buffer, 256, &NumberOfBytesRead, nullptr)) {
+            printf("%.*s\n", NumberOfBytesRead, buffer);
         }
 
-        cout << "Get DateTime From Controller: " << lpBuffer << endl;
     }
-
-    bResult = UnmapViewOfFile(lpBuffer);
-    if (!bResult) {
-        printf("UnmapViewOfFile Failed Error: %d.\n", GetLastError());
-        exit(-1);
-    }
-    else {
-        printf("UnmapViewOfFile Success!\n");
-    }
-
-    CloseHandle(hFileMap);
-
-    _socket::wsacleanup_();
 
     return 0;
 }

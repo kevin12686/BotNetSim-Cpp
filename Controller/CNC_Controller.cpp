@@ -25,6 +25,36 @@ typedef struct MYTHREAD {
 } MyThread;
 
 
+HANDLE WINAPI MakeSlot(HANDLE hFile, LPTSTR lpszSlotName) {
+    hFile = CreateFile(lpszSlotName,
+                       GENERIC_WRITE,
+                       FILE_SHARE_READ,
+                       (LPSECURITY_ATTRIBUTES) nullptr,
+                       OPEN_EXISTING,
+                       FILE_ATTRIBUTE_NORMAL,
+                       (HANDLE) nullptr);
+    return hFile;
+
+}
+
+BOOL WriteSlot(HANDLE hSlot, LPTSTR lpszMessage) {
+    BOOL fResult;
+    DWORD cbWritten;
+
+    fResult = WriteFile(hSlot,
+                        lpszMessage,
+                        (DWORD) (lstrlen(lpszMessage) + 1) * sizeof(TCHAR),
+                        &cbWritten,
+                        (LPOVERLAPPED) nullptr);
+
+    if (!fResult) {
+        printf("WriteFile failed with %d.\n", GetLastError());
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
 void socketAccept();
 
 void messageHandle(LPVOID);
@@ -40,6 +70,8 @@ void requestDateTime();
 void setDateTime();
 
 int getMaxDay(int, int);
+
+void BoardCast(char *);
 
 ostringstream calculate_time(char *);
 
@@ -62,6 +94,7 @@ char *LOCAL_IP_ADDRESS;
 int LOCAL_TIMEZONE;
 
 bool CONTROL_DEBUG = false;
+
 
 int main(int argc, char *argv[]) {
 
@@ -118,28 +151,28 @@ int main(int argc, char *argv[]) {
     strcpy_s(LOCAL_IP_ADDRESS, local_ip_length, getLocalIP());
 
     if (!strcmp(LOCAL_IP_ADDRESS, "Failed")) {
-        printf("[Error] Cannot Get Local IP Address!\nPlease Input Local IP Address:\n");
-        cin >> LOCAL_IP_ADDRESS;
+        printf("[Error] Cannot Get Local IP Address!\n");
+        strcpy_s(LOCAL_IP_ADDRESS, strlen("127.0.0.1") + 1, "127.0.0.1");
     }
 
     printf("[Application] Console IP Address: %s\n", CONSOLE_IP_ADDRESS);
     printf("[Application] Local IP Address: %s\n", LOCAL_IP_ADDRESS);
     printf("[Application] TIMEZONE: %d\n", LOCAL_TIMEZONE);
 
-    date_lock = CreateMutex(NULL, false, NULL);
-    if (date_lock == NULL) {
+    date_lock = CreateMutex(nullptr, false, nullptr);
+    if (date_lock == nullptr) {
         printf("[ERROR] CreateMutex Error. ErrorCode=%d", GetLastError());
         return 1;
     }
 
-    suspect_lock = CreateMutex(NULL, false, NULL);
-    if (suspect_lock == NULL) {
+    suspect_lock = CreateMutex(nullptr, false, nullptr);
+    if (suspect_lock == nullptr) {
         printf("[ERROR] CreateMutex Error. ErrorCode=%d", GetLastError());
         return 1;
     }
 
-    bot_lock = CreateMutex(NULL, false, NULL);
-    if (bot_lock == NULL) {
+    bot_lock = CreateMutex(nullptr, false, nullptr);
+    if (bot_lock == nullptr) {
         printf("[ERROR] CreateMutex Error. ErrorCode=%d", GetLastError());
         return 1;
     }
@@ -370,13 +403,7 @@ void messageHandle(LPVOID s) {
             clientBot.push_back(bot_port);
         } else {
             WaitForSingleObject(bot_lock, INFINITE);
-            cout << "[BroadCast] " << message << endl;
-            for (short i = 0; i < serventBot.size(); i++) {
-                _socket sConnect(LOCAL_IP_ADDRESS, serventBot[i], 1024);
-                sConnect.send_(message);
-                sConnect.close_();
-            }
-
+            BoardCast(message);
             ReleaseMutex(bot_lock);
         }
 
@@ -385,13 +412,7 @@ void messageHandle(LPVOID s) {
         clientS->send_((char *) "OK");
     } else {
         WaitForSingleObject(bot_lock, INFINITE);
-        cout << "[BroadCast] " << message << endl;
-        for (short i = 0; i < serventBot.size(); i++) {
-            _socket sConnect(LOCAL_IP_ADDRESS, serventBot[i], 1024);
-            sConnect.send_(message);
-            sConnect.close_();
-        }
-
+        BoardCast(message);
         ReleaseMutex(bot_lock);
     }
 
@@ -646,4 +667,26 @@ void requestDateTime() {
 
         Sleep(REQUEST_DATETIME_INTERVALS * 1000);
     }
+}
+
+void BoardCast(char *message) {
+
+    WaitForSingleObject(bot_lock, INFINITE);
+    cout << "[BroadCast] " << message << endl;
+    HANDLE hFile;
+
+    for (short i = 0; i < serventBot.size(); i++) {
+        char serverName[100];
+        strcat(serverName, (const char *) "\\\\.\\mailslot\\");
+        strcat(serverName, serventBot[i]);
+        LPTSTR SlotName = TEXT(serverName);
+        hFile = MakeSlot(hFile, SlotName);
+        if (hFile == INVALID_HANDLE_VALUE) {
+            printf("BoardCast to %s Failed.\n", serventBot[i]);
+        }
+        WriteSlot(hFile, message);
+    }
+
+    ReleaseMutex(bot_lock);
+
 }

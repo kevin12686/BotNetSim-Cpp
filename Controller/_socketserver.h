@@ -11,6 +11,8 @@ public:
 
     ~_socketserver();
 
+    bool get_status();
+
     // mini second
     bool check_connect_(int);
 
@@ -19,6 +21,7 @@ public:
     int close_();
 
 private:
+    bool status;
     struct timeval tv;
     fd_set readfds;
     int Buffersize;

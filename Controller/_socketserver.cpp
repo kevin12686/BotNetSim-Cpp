@@ -4,9 +4,12 @@
 bool _socketserver::Debug = false;
 
 _socketserver::_socketserver(char *port, int buffersize) {
+    this->status = false;
     this->Buffersize = buffersize;
     this->Port = port;
-    init_();
+    if (init_()) {
+        this->status = true;
+    }
     if (_socketserver::Debug) {
         printf("[Debug INFO] Socket Server initialized.\n");
     }
@@ -14,6 +17,10 @@ _socketserver::_socketserver(char *port, int buffersize) {
 
 _socketserver::~_socketserver() {
     this->close_();
+}
+
+bool _socketserver::get_status() {
+    return this->status;
 }
 
 bool _socketserver::check_connect_(int mini_sec) {
@@ -36,7 +43,7 @@ bool _socketserver::check_connect_(int mini_sec) {
     }
 }
 
-_socket * _socketserver::accept_() {
+_socket *_socketserver::accept_() {
     SOCKADDR_IN clientinfo;
     int infosize = sizeof(clientinfo);
     _socket *client = NULL;
@@ -44,8 +51,7 @@ _socket * _socketserver::accept_() {
     if (ClientSocket == INVALID_SOCKET) {
         printf("Accept failed with error: %d\n", WSAGetLastError());
         this->close_();
-    }
-    else{
+    } else {
         client = new _socket(ClientSocket, inet_ntoa(clientinfo.sin_addr), this->Buffersize);
     }
     return client;
@@ -69,7 +75,7 @@ int _socketserver::init_() {
     this->hints.ai_protocol = IPPROTO_TCP;
     this->hints.ai_flags = AI_PASSIVE;
 
-    iResult = getaddrinfo(NULL, this->Port, &this->hints, &result);
+    iResult = getaddrinfo("0.0.0.0", this->Port, &this->hints, &result);
     if (iResult != 0) {
         printf("Getaddrinfo failed with error: %d\n", iResult);
         return 0;
