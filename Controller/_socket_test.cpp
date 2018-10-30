@@ -8,7 +8,6 @@
 
 HANDLE hSlot;
 LPTSTR SlotName = TEXT((char*)"\\\\.\\mailslot\\7777");
-char* boardcast;
 char buffer[256];
 DWORD NumberOfBytesRead;
 

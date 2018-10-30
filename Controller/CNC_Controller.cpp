@@ -71,7 +71,7 @@ void setDateTime();
 
 int getMaxDay(int, int);
 
-void BoardCast(char *);
+void BroadCast(char *);
 
 ostringstream calculate_time(char *);
 
@@ -403,7 +403,7 @@ void messageHandle(LPVOID s) {
             clientBot.push_back(bot_port);
         } else {
             WaitForSingleObject(bot_lock, INFINITE);
-            BoardCast(message);
+            BroadCast(message);
             ReleaseMutex(bot_lock);
         }
 
@@ -412,7 +412,7 @@ void messageHandle(LPVOID s) {
         clientS->send_((char *) "OK");
     } else {
         WaitForSingleObject(bot_lock, INFINITE);
-        BoardCast(message);
+        BroadCast(message);
         ReleaseMutex(bot_lock);
     }
 
@@ -669,7 +669,7 @@ void requestDateTime() {
     }
 }
 
-void BoardCast(char *message) {
+void BroadCast(char *message) {
 
     WaitForSingleObject(bot_lock, INFINITE);
     cout << "[BroadCast] " << message << endl;
@@ -682,9 +682,12 @@ void BoardCast(char *message) {
         LPTSTR SlotName = TEXT(serverName);
         hFile = MakeSlot(hFile, SlotName);
         if (hFile == INVALID_HANDLE_VALUE) {
-            printf("BoardCast to %s Failed.\n", serventBot[i]);
+            printf("BroadCast to %s Failed.\n", serventBot[i]);
         }
-        WriteSlot(hFile, message);
+        else {
+            WriteSlot(hFile, message);
+        }
+
     }
 
     ReleaseMutex(bot_lock);
