@@ -19,13 +19,13 @@
 #define SensorPerMsg 45
 #define ServentPerClient 5
 // ?% Become Servent Bot
-#define Sevent_Bot_Persent 30
+#define Sevent_Bot_Persent 100
 // ?% Become Check Bot
-#define Check_Bot_Persent 30
-#define Sleep_Bot_Persent 30
+#define Check_Bot_Persent 50
+#define Sleep_Bot_Persent 0
 
 #define Keep_Spreading_Setting false
-#define Reserved_Host 500
+#define Reserved_Host 1000
 
 #define doc_name "Record.csv"
 #define record_rate 1000
@@ -110,7 +110,7 @@ string msg_token[] = {"ChangeCheckBot", "Promotion", "Request", "HOST", "CTRL", 
 
 // Global Variables
 // init
-Timer v_t(100);
+Timer v_t(10);
 chrono::steady_clock::time_point start_time;
 pthread_mutex_t action_lock = PTHREAD_MUTEX_INITIALIZER, data_lock = PTHREAD_MUTEX_INITIALIZER, ban_lock = PTHREAD_MUTEX_INITIALIZER;
 set<HOST *, HOSTPtrComp> host_set;
@@ -441,8 +441,8 @@ void *record(LPVOID console_on) {
             << endl;
     while (*console) {
         record << v_t.timestamp() << ", " << host_set.size() << ", " << bot_set.size() << ", " << servent_bot_set.size()
-               << ", " << bot_set.size() - servent_bot_set.size() - sleep_bot_set.size() << ", " << sleep_bot_set.size()
-               << ", " << check_bot_set.size() << ", " << sensor_set.size()
+               << ", " << bot_set.size() - servent_bot_set.size() - sleep_bot_set.size() - check_bot_set.size() << ", "
+               << sleep_bot_set.size() << ", " << check_bot_set.size() << ", " << sensor_set.size()
                << ", " << crawler_set.size() << ", " << getcha_set.size() << ", " << ban_set.size() << ", "
                << ban_sensor_set.size() << endl;
         record.flush();
@@ -525,7 +525,6 @@ void *handle_client(LPVOID s) {
     }
 
     // exit
-    client->shutdown_(_socket::BOTH);
     client->close_();
     delete client;
     pthread_exit(NULL);
@@ -581,7 +580,6 @@ void *handle_virtual_broadcast(LPVOID args) {
         } else {
             fault_count++;
         }
-        client.shutdown_(_socket::BOTH);
         client.close_();
     } while (!(*console_on) && fault_count < 3 && !send_success);
     if (!send_success) {
@@ -607,7 +605,6 @@ void *change_peerlist(LPVOID console) {
                 printf("[Warning] CTRL %s:%s SWAP Failed.\n", (i->ip).c_str(),
                        (i->port).c_str());
             }
-            client.shutdown_(_socket::BOTH);
             client.close_();
         } else {
             break;
@@ -742,7 +739,6 @@ void *handle_bot_spreading(LPVOID client) {
         }
     }
 
-    (client_i)->shutdown_(_socket::BOTH);
     (client_i)->close_();
     delete client_i;
     delete p;
@@ -783,7 +779,6 @@ void *change_sensor(LPVOID console_on) {
         } else {
             printf("[Warning] %s:%s Connected failed.(Sensor)\n", (target->ip).c_str(), (target->port).c_str());
         }
-        client.shutdown_(_socket::BOTH);
         client.close_();
     }
     pthread_mutex_unlock(&action_lock);
@@ -853,7 +848,6 @@ void *change_crawler(LPVOID console_on) {
         } else {
             printf("[Warning] %s:%s Connected failed.(Crawler)\n", (target->ip).c_str(), (target->port).c_str());
         }
-        client.shutdown_(_socket::BOTH);
         client.close_();
     }
     pthread_mutex_unlock(&action_lock);
@@ -1162,7 +1156,6 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                                 printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
                                        ((*it_i)->port).c_str());
                             }
-                            sub_client.shutdown_(_socket::BOTH);
                         } else {
                             printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
                                    ((*it_i)->port).c_str());
@@ -1267,7 +1260,6 @@ int servent_infection(bool *console) {
                 if (client->send_((char *) send_data.c_str()) == -1) {
                     printf("[Warning] HOST %s:%s Change Bot Failed.\n", (target->ip).c_str(), (target->port).c_str());
                 } else {
-                    client->shutdown_(_socket::BOTH);
                     client->close_();
                     pthread_mutex_lock(&data_lock);
                     bot_set.insert(target);
@@ -1305,7 +1297,6 @@ int servent_first_infection(bool *console) {
             if (client->get_status()) {
                 if (client->send_((char *) ("Change:ServentBot")) == -1) {
                     printf("[Warning] HOST %s:%s Change Bot Failed.\n", (target->ip).c_str(), (target->port).c_str());
-                    client->shutdown_(_socket::BOTH);
                     client->close_();
                     delete client;
                 } else {

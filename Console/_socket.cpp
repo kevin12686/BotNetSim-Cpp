@@ -128,8 +128,8 @@ int _socket::close_() {
     if (_socket::Debug) {
         printf("[Debug INFO] Socket close.\n");
     }
-    bool time_wait = false;
-    setsockopt(this->ConnectSocket, SOL_SOCKET, SO_DONTLINGER, (const char *) &time_wait, sizeof(BOOL));
+    // bool time_wait = false;
+    // setsockopt(this->ConnectSocket, SOL_SOCKET, SO_DONTLINGER, (const char *) &time_wait, sizeof(BOOL));
     int result = closesocket(this->ConnectSocket);
     this->clean_();
     return result;
