@@ -8,6 +8,7 @@
 #include <queue>
 #include <stdlib.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include "_socketserver.h"
 #include "Timer.h"
 
@@ -15,6 +16,8 @@
 #define BUFSIZE 1024
 // Mini Seconds
 #define IDLE 1000
+// Max Accept Client
+#define Max_Accept_Num 2000
 // Max Sensor Per Message
 #define SensorPerMsg 45
 #define ServentPerClient 5
@@ -110,9 +113,10 @@ string msg_token[] = {"ChangeCheckBot", "Promotion", "Request", "HOST", "CTRL", 
 
 // Global Variables
 // init
-Timer v_t(10);
+Timer v_t(1);
 chrono::steady_clock::time_point start_time;
 pthread_mutex_t action_lock = PTHREAD_MUTEX_INITIALIZER, data_lock = PTHREAD_MUTEX_INITIALIZER, ban_lock = PTHREAD_MUTEX_INITIALIZER;
+sem_t semaphore;
 set<HOST *, HOSTPtrComp> host_set;
 set<HOST *, HOSTPtrComp> bot_set;
 set<HOST *, HOSTPtrComp> servent_bot_set;
@@ -131,6 +135,8 @@ int main() {
         printf("[Error] Setting Error.\n");
         return 1;
     }
+
+    sem_init(&semaphore, 0, Max_Accept_Num);
 
     start_time = chrono::steady_clock::now();
     v_t.setUpdateRate(TSD);
@@ -197,19 +203,7 @@ int main() {
     Sleep(1000);
 
     // User Interface
-    printf("\n");
-    printf("quit : Stop the Application\ntime_rate : Get Current Time Rate\n");
-    printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
-    printf("list_bot : List Bot\nlist_ctrl : List Controler\n");
-    printf("list_servent_bot : List Servent_Bot\nlist_sleep_bot : List Sleep_Bot\n");
-    printf("list_check_bot : List Check_Bot\nlist_ban_bot : List Ban_Bot\nlist_ban_sensor : List Ban_Sensor\n");
-    printf("list_crawler : List Crawler\nlist_sensor : List Sensor\n");
-    printf("list_getcha : List Getcha\nglobal : Global Status\n");
-    printf("timestamp : Current Timestamp\nset_time_rate : Set Time Rate\n");
-    printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
-    printf("add_crawler : Add Crawler\nsend_time: Toggle Time Sending\n");
-    printf("change_bot_num : Show change_bot Number\nset_change_bot_num: Set change_bot Number\n");
-    printf("debug : Show debug message\nspreading: Toggle Spreading\nswap: Change Peerlist\n");
+    printf("\nConsole Start up.\n");
     string UserCommand = "";
     while (UserCommand != "quit") {
         cin >> UserCommand;
@@ -362,7 +356,7 @@ int main() {
             } else {
                 printf("[Error] Create Pthread Failed.\n");
             }
-        } else {
+        } else if (UserCommand != "quit") {
             printf("quit : Stop the Application\ntime_rate : Get Current Time Rate\n");
             printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
             printf("list_bot : List Bot\nlist_ctrl : List Controler\n");
@@ -380,6 +374,7 @@ int main() {
 
     // exit
     console_on = false;
+    sem_post(&semaphore);
     pthread_join(server, NULL);
     pthread_join(spreading, NULL);
     v_t.stop();
@@ -470,13 +465,16 @@ void *server_accept(LPVOID console) {
     if (server.get_status()) {
         while (*console_on) {
             if (server.check_connect_(500)) {
-                _socket *client = server.accept_();
-                if (client) {
-                    int result = 0;
-                    pthread_t *temp = new pthread_t;
-                    result = pthread_create(temp, NULL, handle_client, (LPVOID) client);
-                    if (!result) {
-                        t_v.push_back(temp);
+                sem_wait(&semaphore);
+                if (*console_on) {
+                    _socket *client = server.accept_();
+                    if (client) {
+                        int result = 0;
+                        pthread_t *temp = new pthread_t;
+                        result = pthread_create(temp, NULL, handle_client, (LPVOID) client);
+                        if (!result) {
+                            t_v.push_back(temp);
+                        }
                     }
                 }
             }
@@ -527,6 +525,7 @@ void *handle_client(LPVOID s) {
     // exit
     client->close_();
     delete client;
+    sem_post(&semaphore);
     pthread_exit(NULL);
     return NULL;
 }
@@ -1274,6 +1273,7 @@ int servent_infection(bool *console) {
             }
             delete client;
             random_list.clear();
+            printf("[INFO] Infecting Finish.\n");
         }
     }
     return 1;
@@ -1287,7 +1287,7 @@ int servent_first_infection(bool *console) {
     HOST *target = NULL;
     string recv_data;
     if (!host_set.empty() && (host_set.size() > GROWT && host_set.size() > GROWNUM)) {
-        printf("[INFO] Servent Infecting...\n");
+        printf("[INFO] Servent First Infecting...\n");
         for (int i = 0; i < GROWNUM && *console;) {
             random_num = (rand() * rand()) % host_set.size();
             host_i = host_set.begin();
@@ -1334,7 +1334,7 @@ int servent_first_infection(bool *console) {
         for (auto i : handle) {
             pthread_join(i, NULL);
         }
-        printf("[INFO] Servent Infecting Finish\n");
+        printf("[INFO] Servent First Infecting Finish\n");
     }
     return 1;
 }

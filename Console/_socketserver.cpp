@@ -16,7 +16,7 @@ _socketserver::_socketserver(char *port, int buffersize) {
 }
 
 _socketserver::~_socketserver() {
-    this->close_();
+
 }
 
 bool _socketserver::get_status() {
@@ -24,7 +24,7 @@ bool _socketserver::get_status() {
 }
 
 bool _socketserver::check_connect_(int mini_sec) {
-    int temp = -1;
+    int temp;
     FD_ZERO(&this->readfds);
     FD_SET(this->ListenSocket, &this->readfds);
     this->tv.tv_usec = mini_sec % 1000 * 1000;
@@ -58,11 +58,15 @@ _socket *_socketserver::accept_() {
 }
 
 int _socketserver::close_() {
-    closesocket(this->ListenSocket);
+    int result = 0;
+    if (this->ListenSocket != INVALID_SOCKET) {
+        result = closesocket(this->ListenSocket);
+        this->ListenSocket = INVALID_SOCKET;
+    }
     if (_socketserver::Debug) {
         printf("[Debug INFO] Socket Server closed.\n");
     }
-    return 1;
+    return result;
 }
 
 int _socketserver::init_() {
