@@ -57,7 +57,11 @@ _socket *_socketserver::accept_() {
 }
 
 int _socketserver::close_() {
-    closesocket(this->ListenSocket);
+    if(this->ListenSocket!=INVALID_SOCKET)
+    {
+        closesocket(this->ListenSocket);
+        this->ListenSocket = INVALID_SOCKET;
+    }
     if (_socketserver::Debug) {
         printf("[Debug INFO] Socket Server closed.\n");
     }

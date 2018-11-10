@@ -132,10 +132,15 @@ bool _socket::shutdown_(short option) {
 }
 
 int _socket::close_() {
+    int result = -1;
     if (_socket::Debug) {
         printf("[Debug INFO] Socket close.\n");
     }
-    int result = closesocket(this->ConnectSocket);
+    if(this->ConnectSocket!=INVALID_SOCKET)
+    {
+        result = closesocket(this->ConnectSocket);
+        this->ConnectSocket = INVALID_SOCKET;
+    }
     this->clean_();
     return result;
 }

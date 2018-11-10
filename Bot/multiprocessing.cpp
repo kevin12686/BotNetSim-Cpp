@@ -156,7 +156,7 @@ int main() {
             cout << "CreateProcess Failure" << endl;
         }
         temp++;
-        Sleep(5);
+        Sleep(25);
     }
 
     // Exit

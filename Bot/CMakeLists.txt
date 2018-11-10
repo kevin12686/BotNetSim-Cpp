@@ -11,15 +11,12 @@ add_executable(SocialNetwork_Bot  SocialNetwork_Bot.cpp )
 add_executable(Multiprocess multiprocessing.cpp )
 
 
-add_executable(File_Server FileMappingServer.cpp)
-add_executable(File_Client FileMappingClient.cpp)
 
 if (WIN32)
     target_link_libraries(_socket ws2_32)
     target_link_libraries(Multiprocess _socket ws2_32)
     target_link_libraries(P2PBot _thread _socket _socketserver)
     target_link_libraries(SocialNetwork_Bot _thread  _socket _socketserver)
-    target_link_libraries(File_Client  ws2_32)
     set(CMAKE_CXX_FLAGS "-static-libgcc -static-libstdc++")
 
 endif ()
