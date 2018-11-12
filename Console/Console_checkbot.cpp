@@ -104,8 +104,10 @@ int PLSIZE = 10;
 bool time_flag = true;
 // Spreading Bot
 bool spreading_flag = false;
-// Spreading Bot
+// First Spreading Bot
 bool first_spreading_flag = false;
+// Getcha of Sensor
+bool getcha_flag = false;
 // Time Spreading Delay(mini seconds-RT)
 short TSD = 500;
 // MsgType Define
@@ -113,7 +115,7 @@ string msg_token[] = {"ChangeCheckBot", "Promotion", "Request", "HOST", "CTRL", 
 
 // Global Variables
 // init
-Timer v_t(1);
+Timer v_t(0);
 chrono::steady_clock::time_point start_time;
 pthread_mutex_t action_lock = PTHREAD_MUTEX_INITIALIZER, data_lock = PTHREAD_MUTEX_INITIALIZER, ban_lock = PTHREAD_MUTEX_INITIALIZER;
 sem_t semaphore;
@@ -356,6 +358,13 @@ int main() {
             } else {
                 printf("[Error] Create Pthread Failed.\n");
             }
+        } else if (UserCommand == "getcha") {
+            if (getcha_flag) {
+                getcha_flag = false;
+            } else {
+                getcha_flag = true;
+            }
+            printf("getcha: %s\n", getcha_flag ? "True" : "False");
         } else if (UserCommand != "quit") {
             printf("quit : Stop the Application\ntime_rate : Get Current Time Rate\n");
             printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
@@ -368,7 +377,7 @@ int main() {
             printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
             printf("add_crawler : Add Crawler\nsend_time: Toggle Time Sending\n");
             printf("change_bot_num : Show change_bot Number\nset_change_bot_num: Set change_bot Number\n");
-            printf("debug : Show debug message\nspreading: Toggle Spreading\nswap: Change Peerlist\n");
+            printf("debug : Show debug message\nspreading: Toggle Spreading\nswap: Change Peerlist\ngetcha: Toggle Ban of Sensors\n");
         }
     }
 
@@ -1167,15 +1176,17 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
 
                 // R
             case 7: {
-                vector<string> ip_arr;
-                arr = split(msg_data, '#');
-                arr.erase(arr.begin());
-                for (auto it_i:arr) {
-                    ip_arr = split(it_i, ':');
-                    create = new HOST;
-                    create->ip = ip_arr.at(0);
-                    create->port = ip_arr.at(1);
-                    getcha_set.insert(create);
+                if (getcha_flag) {
+                    vector<string> ip_arr;
+                    arr = split(msg_data, '#');
+                    arr.erase(arr.begin());
+                    for (auto it_i:arr) {
+                        ip_arr = split(it_i, ':');
+                        create = new HOST;
+                        create->ip = ip_arr.at(0);
+                        create->port = ip_arr.at(1);
+                        getcha_set.insert(create);
+                    }
                 }
                 break;
             }
