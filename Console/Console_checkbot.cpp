@@ -24,7 +24,7 @@
 // ?% Become Servent Bot
 #define Sevent_Bot_Persent 100
 // ?% Become Check Bot
-#define Check_Bot_Persent 50
+#define Check_Bot_Persent 20
 #define Sleep_Bot_Persent 0
 
 #define Keep_Spreading_Setting false
@@ -107,7 +107,10 @@ bool spreading_flag = false;
 // First Spreading Bot
 bool first_spreading_flag = false;
 // Getcha of Sensor
-bool getcha_flag = false;
+bool getcha_flag = true;
+// Ban of Sensor
+bool ban_flag = false;
+int ban_counter = 0;
 // Time Spreading Delay(mini seconds-RT)
 short TSD = 500;
 // MsgType Define
@@ -270,10 +273,10 @@ int main() {
                 printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
             }
         } else if (UserCommand == "global") {
-            printf("Host Number: %d\nBot Number: %d\nSevent_Bot Number: %d\nSleep_Bot Number: %d\nCheck_Bot Number: %d\nControler Number: %d\nCrawler Number: %d\nSensor Number: %d\nGetcha Number: %d\nBan Number: %d\nBan Sensor Number: %d\n",
+            printf("Host Number: %d\nBot Number: %d\nSevent_Bot Number: %d\nSleep_Bot Number: %d\nCheck_Bot Number: %d\nControler Number: %d\nCrawler Number: %d\nSensor Number: %d\nGetcha Number: %d\nBan Number: %d\nBan Sensor Number: %d\nBan Counter: %d\n",
                    host_set.size(), bot_set.size(), servent_bot_set.size(), sleep_bot_set.size(), check_bot_set.size(),
                    controler_set.size(), crawler_set.size(), sensor_set.size(),
-                   getcha_set.size(), ban_set.size(), ban_sensor_set.size());
+                   getcha_set.size(), ban_set.size(), ban_sensor_set.size(), ban_counter);
         } else if (UserCommand == "timestamp") {
             printf("timestamp: %s\n", v_t.timestamp().c_str());
         } else if (UserCommand == "set_time_rate") {
@@ -365,6 +368,23 @@ int main() {
                 getcha_flag = true;
             }
             printf("getcha: %s\n", getcha_flag ? "True" : "False");
+        } else if (UserCommand == "ban") {
+            if (ban_flag) {
+                ban_flag = false;
+            } else {
+                ban_flag = true;
+                if (!getcha_set.empty()) {
+                    set<HOST *, HOSTPtrComp>::iterator temp_i;
+                    for (temp_i = getcha_set.begin(); temp_i != getcha_set.end(); getcha_set.erase(temp_i++)) {
+                        delete *temp_i;
+                    }
+                }
+                printf("Getcha List Clear\n");
+            }
+            printf("ban: %s\n", ban_flag ? "True" : "False");
+        } else if (UserCommand == "counter_reset") {
+            ban_counter = 0;
+            printf("Ban Counter: %d\n", ban_counter);
         } else if (UserCommand != "quit") {
             printf("quit : Stop the Application\ntime_rate : Get Current Time Rate\n");
             printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
@@ -377,7 +397,8 @@ int main() {
             printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
             printf("add_crawler : Add Crawler\nsend_time: Toggle Time Sending\n");
             printf("change_bot_num : Show change_bot Number\nset_change_bot_num: Set change_bot Number\n");
-            printf("debug : Show debug message\nspreading: Toggle Spreading\nswap: Change Peerlist\ngetcha: Toggle Ban of Sensors\n");
+            printf("debug : Show debug message\nspreading: Toggle Spreading\nswap: Change Peerlist\n");
+            printf("getcha: Toggle Getcha of Sensors\nban: Toggle Ban of Sensors\ncounter_reset: Ban Counter Reset\n");
         }
     }
 
@@ -1136,39 +1157,43 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
 
                 // Ban
             case 6: {
-                arr = split(msg_data, ':');
-                create = new HOST;
-                create->ip = arr.at(0);
-                create->port = arr.at(1);
-                bool sensor_flag = false;
-                for (auto i:sensor_set) {
-                    if (i->ip == create->ip && i->port == create->port) {
-                        sensor_flag = true;
-                        break;
+                ban_counter++;
+                if (ban_flag) {
+                    arr = split(msg_data, ':');
+                    create = new HOST;
+                    create->ip = arr.at(0);
+                    create->port = arr.at(1);
+                    bool sensor_flag = false;
+                    for (auto i:sensor_set) {
+                        if (i->ip == create->ip && i->port == create->port) {
+                            sensor_flag = true;
+                            break;
+                        }
                     }
-                }
-                pthread_mutex_lock(&ban_lock);
-                psize = ban_set.size();
-                ban_set.insert(create);
-                if (sensor_flag)
-                    ban_sensor_set.insert(create);
-                bool flag = ban_set.size() > psize;
-                pthread_mutex_unlock(&ban_lock);
-                if (flag) {
-                    set<HOST *, HOSTPtrComp>::iterator it_i;
-                    for (it_i = controler_set.begin(); it_i != controler_set.end(); it_i++) {
-                        _socket sub_client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(), BUFSIZE);
-                        if (sub_client.get_status()) {
-                            string ban_msg = "Ban:" + msg_data;
-                            if (sub_client.send_((char *) ban_msg.c_str()) == -1) {
+                    pthread_mutex_lock(&ban_lock);
+                    psize = ban_set.size();
+                    ban_set.insert(create);
+                    if (sensor_flag)
+                        ban_sensor_set.insert(create);
+                    bool flag = ban_set.size() > psize;
+                    pthread_mutex_unlock(&ban_lock);
+                    if (flag) {
+                        set<HOST *, HOSTPtrComp>::iterator it_i;
+                        for (it_i = controler_set.begin(); it_i != controler_set.end(); it_i++) {
+                            _socket sub_client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(),
+                                               BUFSIZE);
+                            if (sub_client.get_status()) {
+                                string ban_msg = "Ban:" + msg_data;
+                                if (sub_client.send_((char *) ban_msg.c_str()) == -1) {
+                                    printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
+                                           ((*it_i)->port).c_str());
+                                }
+                            } else {
                                 printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
                                        ((*it_i)->port).c_str());
                             }
-                        } else {
-                            printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
-                                   ((*it_i)->port).c_str());
+                            sub_client.close_();
                         }
-                        sub_client.close_();
                     }
                 }
                 break;
