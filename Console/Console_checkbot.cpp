@@ -934,15 +934,14 @@ void *bot_master_ban_bot(LPVOID console_on) {
                      it_i != report_bot_set.end() && *console;) {
                     msg_counter++;
                     msg += ":" + (*it_i)->ip + ":" + (*it_i)->port;
-                    if (msg_counter == SensorPerMsg) {
+                    if (msg_counter >= SensorPerMsg) {
                         for (auto controler: controler_set) {
                             if (!*console)
                                 break;
                             _socket sub_client((char *) (controler->ip).c_str(), (char *) (controler->port).c_str(),
                                                BUFSIZE);
                             if (sub_client.get_status()) {
-                                string ban_msg = "Ban:" + (*it_i)->ip + ":" + (*it_i)->port;
-                                if (sub_client.send_((char *) ban_msg.c_str()) == -1) {
+                                if (sub_client.send_((char *) msg.c_str()) == -1) {
                                     printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", (controler->ip).c_str(),
                                            (controler->port).c_str());
                                 }
@@ -967,8 +966,7 @@ void *bot_master_ban_bot(LPVOID console_on) {
                         _socket sub_client((char *) (controler->ip).c_str(), (char *) (controler->port).c_str(),
                                            BUFSIZE);
                         if (sub_client.get_status()) {
-                            string ban_msg = "Ban:" + (*it_i)->ip + ":" + (*it_i)->port;
-                            if (sub_client.send_((char *) ban_msg.c_str()) == -1) {
+                            if (sub_client.send_((char *) msg.c_str()) == -1) {
                                 printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", (controler->ip).c_str(),
                                        (controler->port).c_str());
                             }
@@ -991,7 +989,7 @@ void *bot_master_ban_bot(LPVOID console_on) {
                      it_i != report_sensor_set.end() && *console;) {
                     msg_counter++;
                     msg += ":" + (*it_i)->ip + ":" + (*it_i)->port;
-                    if (msg_counter == SensorPerMsg) {
+                    if (msg_counter >= SensorPerMsg) {
                         for (auto controler: controler_set) {
                             if (!*console)
                                 break;
@@ -1024,8 +1022,7 @@ void *bot_master_ban_bot(LPVOID console_on) {
                         _socket sub_client((char *) (controler->ip).c_str(), (char *) (controler->port).c_str(),
                                            BUFSIZE);
                         if (sub_client.get_status()) {
-                            string ban_msg = "Ban:" + (*it_i)->ip + ":" + (*it_i)->port;
-                            if (sub_client.send_((char *) ban_msg.c_str()) == -1) {
+                            if (sub_client.send_((char *) msg.c_str()) == -1) {
                                 printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", (controler->ip).c_str(),
                                        (controler->port).c_str());
                             }
