@@ -31,6 +31,8 @@
 #define Reserved_Host 1000
 
 #define doc_name "Record.csv"
+#define sensor_doc_name "Sensor.txt"
+#define crawler_doc_name "Crawler.txt"
 #define record_rate 1000
 
 using namespace std;
@@ -109,7 +111,7 @@ bool spreading_flag = false;
 // First Spreading Bot
 bool first_spreading_flag = false;
 // Getcha of Sensor
-bool getcha_flag = true;
+bool getcha_flag = false;
 // Ban of Sensor
 bool ban_flag = true;
 bool auto_ban_broadcast = true;
@@ -133,7 +135,8 @@ set<HOST *, HOSTPtrComp> check_bot_set;
 set<HOST *, HOSTPtrComp> crawler_set;
 set<HOST *, HOSTPtrComp> sensor_set;
 set<HOST *, HOSTPtrComp> controler_set;
-set<HOST *, HOSTPtrComp> getcha_set;
+set<HOST *, HOSTPtrComp> sensor_getcha_set;
+set<HOST *, HOSTPtrComp> crawler_getcha_set;
 set<HOST *, HOSTPtrComp> ban_bot_set;
 set<HOST *, HOSTPtrComp> ban_sensor_set;
 set<HOST *, HOSTPtrComp> report_bot_set;
@@ -269,8 +272,12 @@ int main() {
                 printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
             }
         } else if (UserCommand == "list_getcha") {
-            printf("Getcha List\n");
-            for (auto i : getcha_set) {
+            printf("Sensor Getcha List\n");
+            for (auto i : sensor_getcha_set) {
+                printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
+            }
+            printf("Crawler Getcha List\n");
+            for (auto i : crawler_getcha_set) {
                 printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
             }
         } else if (UserCommand == "list_ban_bot") {
@@ -284,10 +291,11 @@ int main() {
                 printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
             }
         } else if (UserCommand == "global") {
-            printf("Host Number: %d\nBot Number: %d\nSevent_Bot Number: %d\nSleep_Bot Number: %d\nCheck_Bot Number: %d\nControler Number: %d\nCrawler Number: %d\nSensor Number: %d\nGetcha Number: %d\nBan Bot Number: %d\nBan Sensor Number: %d\nReport Bot Number: %d\nReport Sensor Number: %d\nBan Counter: %d\n",
+            printf("Host Number: %d\nBot Number: %d\nSevent_Bot Number: %d\nSleep_Bot Number: %d\nCheck_Bot Number: %d\nControler Number: %d\nCrawler Number: %d\nSensor Number: %d\nSensor Getcha Number: %d\nCrawler Getcha Number: %d\nBan Bot Number: %d\nBan Sensor Number: %d\nReport Bot Number: %d\nReport Sensor Number: %d\nBan Counter: %d\n",
                    host_set.size(), bot_set.size(), servent_bot_set.size(), sleep_bot_set.size(), check_bot_set.size(),
                    controler_set.size(), crawler_set.size(), sensor_set.size(),
-                   getcha_set.size(), ban_bot_set.size(), ban_sensor_set.size(), report_bot_set.size(),
+                   sensor_getcha_set.size(), crawler_getcha_set.size(), ban_bot_set.size(), ban_sensor_set.size(),
+                   report_bot_set.size(),
                    report_sensor_set.size(), ban_counter);
         } else if (UserCommand == "timestamp") {
             printf("timestamp: %s\n", v_t.timestamp().c_str());
@@ -378,9 +386,17 @@ int main() {
             ban_counter = 0;
             printf("Ban Counter: %d\n", ban_counter);
         } else if (UserCommand == "getcha_list_clear") {
-            if (!getcha_set.empty()) {
+            if (!sensor_getcha_set.empty()) {
                 set<HOST *, HOSTPtrComp>::iterator temp_i;
-                for (temp_i = getcha_set.begin(); temp_i != getcha_set.end(); getcha_set.erase(temp_i++)) {
+                for (temp_i = sensor_getcha_set.begin();
+                     temp_i != sensor_getcha_set.end(); sensor_getcha_set.erase(temp_i++)) {
+                    delete *temp_i;
+                }
+            }
+            if (!crawler_getcha_set.empty()) {
+                set<HOST *, HOSTPtrComp>::iterator temp_i;
+                for (temp_i = crawler_getcha_set.begin();
+                     temp_i != crawler_getcha_set.end(); crawler_getcha_set.erase(temp_i++)) {
                     delete *temp_i;
                 }
             }
@@ -400,6 +416,7 @@ int main() {
                 printf("[Error] Create Pthread Failed.\n");
             }
         } else if (UserCommand != "quit") {
+            printf("------------------Instruction------------------\n");
             printf("quit : Stop the Application\ntime_rate : Get Current Time Rate\n");
             printf("update_rate : Get Current Time Update Rate\nlist_host : List Host\n");
             printf("list_bot : List Bot\nlist_ctrl : List Controler\n");
@@ -414,6 +431,7 @@ int main() {
             printf("debug : Show debug message\nspreading: Toggle Spreading\nswap: Change Peerlist\n");
             printf("getcha_flag: Toggle Getcha of Sensors\nban_flag: Toggle Ban of Sensors\ncounter_reset: Ban Counter Reset\n");
             printf("getcha_list_clear: Clear Getcha List\nauto_ban: Auto Ban Broadcast\nban: Bot Master Ban Bot\n");
+            printf("-----------------------------------------------\n");
         }
     }
 
@@ -430,6 +448,21 @@ int main() {
 
 
     _socket::wsacleanup_();
+
+    ofstream s_record, c_record;
+    s_record.open(sensor_doc_name);
+    for (auto i: sensor_getcha_set) {
+        s_record << i->ip << ":" << i->port << endl;
+        s_record.flush();
+    }
+    s_record.close();
+    c_record.open(crawler_doc_name);
+    for (auto i: crawler_getcha_set) {
+        c_record << i->ip << ":" << i->port << endl;
+        c_record.flush();
+    }
+    c_record.close();
+    printf("Getcha Record Done.\n");
 
     set<HOST *, HOSTPtrComp>::iterator it_i;
     if (!host_set.empty()) {
@@ -457,8 +490,13 @@ int main() {
             delete *it_i;
         }
     }
-    if (!getcha_set.empty()) {
-        for (it_i = getcha_set.begin(); it_i != getcha_set.end(); getcha_set.erase(it_i++)) {
+    if (!sensor_getcha_set.empty()) {
+        for (it_i = sensor_getcha_set.begin(); it_i != sensor_getcha_set.end(); sensor_getcha_set.erase(it_i++)) {
+            delete *it_i;
+        }
+    }
+    if (!crawler_getcha_set.empty()) {
+        for (it_i = crawler_getcha_set.begin(); it_i != crawler_getcha_set.end(); crawler_getcha_set.erase(it_i++)) {
             delete *it_i;
         }
     }
@@ -491,14 +529,15 @@ void *record(LPVOID console_on) {
     ofstream record;
     record.open(doc_name);
     record
-            << "timestamp, host number, bot number, servent number, client number, sleep number, check number, senser number, crawler number, getcha number, ban bot number, ban sensor number, report bot number, report sensor number"
+            << "timestamp, host number, bot number, servent number, client number, sleep number, check number, senser number, crawler number,sensor getcha number, crawler getcha number, ban bot number, ban sensor number, report bot number, report sensor number"
             << endl;
     while (*console) {
         record << v_t.timestamp() << ", " << host_set.size() << ", " << bot_set.size() << ", " << servent_bot_set.size()
                << ", " << bot_set.size() - servent_bot_set.size() - sleep_bot_set.size() - check_bot_set.size() << ", "
                << sleep_bot_set.size() << ", " << check_bot_set.size() << ", " << sensor_set.size()
-               << ", " << crawler_set.size() << ", " << getcha_set.size() << ", " << ban_bot_set.size() << ", "
-               << ban_sensor_set.size() << ", " << report_bot_set.size() << ", " << report_sensor_set.size() << endl;
+               << ", " << crawler_set.size() << ", " << sensor_getcha_set.size() << ", " << crawler_getcha_set.size()
+               << ", " << ban_bot_set.size() << ", " << ban_sensor_set.size() << ", " << report_bot_set.size() << ", "
+               << report_sensor_set.size() << endl;
         record.flush();
         Sleep(record_rate);
     }
@@ -1392,9 +1431,24 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                     for (auto it_i:arr) {
                         ip_arr = split(it_i, ':');
                         create = new HOST;
-                        create->ip = ip_arr.at(0);
+                        string ip = ip_arr.at(0);
+                        char s_or_c = ip.front();
+                        ip.erase(ip.begin());
+                        create->ip = ip;
                         create->port = ip_arr.at(1);
-                        getcha_set.insert(create);
+                        switch (s_or_c) {
+                            case 'S':
+                            case 's': {
+                                sensor_getcha_set.insert(create);
+                                break;
+                            }
+                            case 'C':
+                            case 'c': {
+                                crawler_getcha_set.insert(create);
+                                break;
+                            }
+                        }
+
                     }
                 }
                 break;
