@@ -24,7 +24,7 @@
 // ?% Become Servent Bot
 #define Sevent_Bot_Persent 100
 // ?% Become Check Bot
-#define Check_Bot_Persent 20
+#define Check_Bot_Persent 10
 #define Sleep_Bot_Persent 0
 
 #define Keep_Spreading_Setting false
@@ -1148,7 +1148,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
     if (msg_type_no < 0)
         printf("[Warning] Message Token Invalid. Msg: %s\n", msg_data.c_str());
     else {
-        int random_num, psize, delay;
+        int random_num, bot_psize, sensor_psize, delay;
         string output;
         msg_data.assign(msg_data, msg_token[msg_type_no].length(), msg_data.length() - msg_token[msg_type_no].length());
         switch (msg_type_no) {
@@ -1386,7 +1386,8 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         }
                     }
                     pthread_mutex_lock(&ban_lock);
-                    psize = ban_bot_set.size();
+                    bot_psize = ban_bot_set.size();
+                    sensor_psize = ban_sensor_set.size();
                     if (auto_ban_broadcast) {
                         if (sensor_flag)
                             ban_sensor_set.insert(create);
@@ -1398,7 +1399,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         else
                             report_bot_set.insert(create);
                     }
-                    bool flag = ban_bot_set.size() > psize;
+                    bool flag = ban_bot_set.size() > bot_psize || ban_sensor_set.size() > sensor_psize;
                     pthread_mutex_unlock(&ban_lock);
                     if (flag && auto_ban_broadcast) {
                         set<HOST *, HOSTPtrComp>::iterator it_i;
