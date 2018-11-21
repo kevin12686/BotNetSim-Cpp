@@ -13,22 +13,24 @@
 #include "Timer.h"
 
 #define PORT "6666"
-#define BUFSIZE 1024
+#define BUFSIZE 4096
 // Mini Seconds
 #define IDLE 1000
 // Max Accept Client
 #define Max_Accept_Num 2000
 // Max Sensor Per Message
+#define MaxBanPerMsg 150
 #define SensorPerMsg 45
 #define ServentPerClient 5
 // ?% Become Servent Bot
 #define Sevent_Bot_Persent 100
-// ?% Become Check Bot
-#define Check_Bot_Persent 10
+
 #define Sleep_Bot_Persent 0
 
+#define PeerList_Sensor_Persent 50
+
 #define Keep_Spreading_Setting false
-#define Reserved_Host 1000
+#define Reserved_Host 500
 
 #define doc_name "Record.csv"
 #define sensor_doc_name "Sensor.txt"
@@ -80,9 +82,13 @@ void *bot_master_ban_bot(LPVOID);
 
 void *getcha_switch(LPVOID);
 
+void *keep_switch(LPVOID);
+
 vector<string> split(const string &, char);
 
 int delay_choose(void);
+
+int promotion_choose(void);
 
 int promotion_choose(void);
 
@@ -96,6 +102,9 @@ int servent_infection(bool *);
 
 int servent_first_infection(bool *);
 
+// ?% Become Check Bot
+int Check_Bot_Persent = 10;
+
 // Setting
 bool show_debug_msg = false;
 // Growing rate(minutes-VT)
@@ -106,6 +115,8 @@ int GROWNUM = 20;
 int GROWT = 30;
 // Initial PeerList Size
 int PLSIZE = 10;
+// Initial Sensor Number
+int Sensor_Num = 300;
 // Spreading Bot
 bool spreading_flag = false;
 // First Spreading Bot
@@ -114,6 +125,8 @@ bool first_spreading_flag = false;
 bool getcha_flag = false;
 // Ban of Sensor
 bool ban_flag = true;
+// Keep Reputation of Sensor
+bool keep_flag = true;
 bool auto_ban_broadcast = true;
 int ban_counter = 0;
 // Time Spreading Delay(mini seconds-RT)
@@ -135,6 +148,7 @@ set<HOST *, HOSTPtrComp> check_bot_set;
 set<HOST *, HOSTPtrComp> crawler_set;
 set<HOST *, HOSTPtrComp> sensor_set;
 set<HOST *, HOSTPtrComp> controler_set;
+set<HOST *, HOSTPtrComp> getcha_set;
 set<HOST *, HOSTPtrComp> sensor_getcha_set;
 set<HOST *, HOSTPtrComp> crawler_getcha_set;
 set<HOST *, HOSTPtrComp> ban_bot_set;
@@ -160,6 +174,14 @@ int main() {
 
     // main
     bool console_on = true;
+
+    printf("Sensor Number(Default %d): ", Sensor_Num);
+    cin >> Sensor_Num;
+    printf("Sensor Number: %d\n", Sensor_Num);
+
+    printf("Check Bot Persent(Default %d): ", Check_Bot_Persent);
+    cin >> Check_Bot_Persent;
+    printf("Check Bot Persent: %d %%\n\n", Check_Bot_Persent);
 
     // timer start
     result = pthread_create(&timer, NULL, virtual_time, NULL);
@@ -216,12 +238,13 @@ int main() {
     Sleep(1000);
 
     // User Interface
-    printf("\nConsole Start up.\n");
-    printf("Change Bot Number: %d\n", GROWNUM);
+    printf("\nChange Bot Number: %d\n", GROWNUM);
     printf("spreading_flag: %s\n", spreading_flag ? "True" : "False");
+    printf("keep_flag: %s\n", keep_flag ? "True" : "False");
     printf("getcha_flag: %s\n", getcha_flag ? "True" : "False");
     printf("ban_flag: %s\n", ban_flag ? "True" : "False");
     printf("Auto Ban Broadcast: %s\n", auto_ban_broadcast ? "True" : "False");
+    printf("Console Start up.\n\n");
 
     string UserCommand = "";
     while (UserCommand != "quit") {
@@ -291,12 +314,19 @@ int main() {
                 printf("IP: %s, Port: %s\n", (i->ip).c_str(), (i->port).c_str());
             }
         } else if (UserCommand == "global") {
-            printf("Host Number: %d\nBot Number: %d\nSevent_Bot Number: %d\nSleep_Bot Number: %d\nCheck_Bot Number: %d\nControler Number: %d\nCrawler Number: %d\nSensor Number: %d\nSensor Getcha Number: %d\nCrawler Getcha Number: %d\nBan Bot Number: %d\nBan Sensor Number: %d\nReport Bot Number: %d\nReport Sensor Number: %d\nBan Counter: %d\n",
+            printf("Host Number: %d\nBot Number: %d\nSevent_Bot Number: %d\nSleep_Bot Number: %d\nCheck_Bot Number: %d\nControler Number: %d\nCrawler Number: %d\nSensor Number: %d\nSensor Getcha Number: %d\nCrawler Getcha Number: %d\nTotal Getcha Number: %d\nBan Bot Number: %d\nBan Sensor Number: %d\nReport Bot Number: %d\nReport Sensor Number: %d\nBan Counter: %d\n",
                    host_set.size(), bot_set.size(), servent_bot_set.size(), sleep_bot_set.size(), check_bot_set.size(),
-                   controler_set.size(), crawler_set.size(), sensor_set.size(),
-                   sensor_getcha_set.size(), crawler_getcha_set.size(), ban_bot_set.size(), ban_sensor_set.size(),
-                   report_bot_set.size(),
-                   report_sensor_set.size(), ban_counter);
+                   controler_set.size(), crawler_set.size(), sensor_set.size(), sensor_getcha_set.size(),
+                   crawler_getcha_set.size(), getcha_set.size(), ban_bot_set.size(), ban_sensor_set.size(),
+                   report_bot_set.size(), report_sensor_set.size(), ban_counter);
+        } else if (UserCommand == "setting") {
+            printf("Check Bot Persent %d %%\n", Check_Bot_Persent);
+            printf("Change Bot Number: %d\n", GROWNUM);
+            printf("spreading_flag: %s\n", spreading_flag ? "True" : "False");
+            printf("keep_flag: %s\n", keep_flag ? "True" : "False");
+            printf("getcha_flag: %s\n", getcha_flag ? "True" : "False");
+            printf("ban_flag: %s\n", ban_flag ? "True" : "False");
+            printf("Auto Ban Broadcast: %s\n", auto_ban_broadcast ? "True" : "False");
         } else if (UserCommand == "timestamp") {
             printf("timestamp: %s\n", v_t.timestamp().c_str());
         } else if (UserCommand == "set_time_rate") {
@@ -376,6 +406,16 @@ int main() {
                 printf("[Error] Create Pthread Failed.\n");
             }
             printf("getcha: %s\n", getcha_flag ? "True" : "False");
+        } else if (UserCommand == "keep_flag") {
+            keep_flag = !keep_flag;
+            pthread_t t;
+            result = pthread_create(&t, NULL, keep_switch, (LPVOID) &console_on);
+            if (!result) {
+                thread_handle.push_back(t);
+            } else {
+                printf("[Error] Create Pthread Failed.\n");
+            }
+            printf("keep: %s\n", keep_flag ? "True" : "False");
         } else if (UserCommand == "ban_flag") {
             ban_flag = !ban_flag;
             printf("ban: %s\n", ban_flag ? "True" : "False");
@@ -400,6 +440,7 @@ int main() {
                     delete *temp_i;
                 }
             }
+            getcha_set.clear();
             printf("Getcha List Cleared.\n");
         } else if (UserCommand == "ban") {
             int num;
@@ -423,14 +464,15 @@ int main() {
             printf("list_servent_bot : List Servent_Bot\nlist_sleep_bot : List Sleep_Bot\n");
             printf("list_check_bot : List Check_Bot\nlist_ban_bot : List Ban_Bot\nlist_ban_sensor : List Ban_Sensor\n");
             printf("list_crawler : List Crawler\nlist_sensor : List Sensor\n");
-            printf("list_getcha : List Getcha\nglobal : Global Status\n");
+            printf("list_getcha : List Getcha\nglobal : Global Status\nsetting : Show Setting Information\n");
             printf("timestamp : Current Timestamp\nset_time_rate : Set Time Rate\n");
             printf("set_update_rate : Set Update Rate\nadd_sensor : Add Sensor\n");
             printf("add_crawler : Add Crawler\nsend_time: Toggle Time Sending\n");
-            printf("change_bot_num : Show change_bot Number\nset_change_bot_num: Set change_bot Number\n");
-            printf("debug : Show debug message\nspreading: Toggle Spreading\nswap: Change Peerlist\n");
-            printf("getcha_flag: Toggle Getcha of Sensors\nban_flag: Toggle Ban of Sensors\ncounter_reset: Ban Counter Reset\n");
-            printf("getcha_list_clear: Clear Getcha List\nauto_ban: Auto Ban Broadcast\nban: Bot Master Ban Bot\n");
+            printf("change_bot_num : Show change_bot Number\nset_change_bot_num : Set change_bot Number\n");
+            printf("debug : Show debug message\nspreading : Toggle Spreading\nswap : Change Peerlist\n");
+            printf("getcha_flag : Toggle Getcha of Sensors\nban_flag : Toggle Ban of Sensors\ncounter_reset : Ban Counter Reset\n");
+            printf("getcha_list_clear : Clear Getcha List\nauto_ban : Auto Ban Broadcast\nban : Bot Master Ban Bot\n");
+            printf("keep_flag : Keep Reputation of Sensor\n");
             printf("-----------------------------------------------\n");
         }
     }
@@ -520,6 +562,7 @@ int main() {
             delete *it_i;
         }
     }
+    getcha_set.clear();
     servent_bot_set.clear();
 }
 
@@ -529,15 +572,15 @@ void *record(LPVOID console_on) {
     ofstream record;
     record.open(doc_name);
     record
-            << "timestamp, host number, bot number, servent number, client number, sleep number, check number, senser number, crawler number,sensor getcha number, crawler getcha number, ban bot number, ban sensor number, report bot number, report sensor number"
+            << "timestamp, host number, bot number, servent number, client number, sleep number, check number, senser number, crawler number,sensor getcha number, crawler getcha number, total getcha number, ban bot number, ban sensor number, report bot number, report sensor number"
             << endl;
     while (*console) {
         record << v_t.timestamp() << ", " << host_set.size() << ", " << bot_set.size() << ", " << servent_bot_set.size()
                << ", " << bot_set.size() - servent_bot_set.size() - sleep_bot_set.size() - check_bot_set.size() << ", "
                << sleep_bot_set.size() << ", " << check_bot_set.size() << ", " << sensor_set.size()
                << ", " << crawler_set.size() << ", " << sensor_getcha_set.size() << ", " << crawler_getcha_set.size()
-               << ", " << ban_bot_set.size() << ", " << ban_sensor_set.size() << ", " << report_bot_set.size() << ", "
-               << report_sensor_set.size() << endl;
+               << ", " << getcha_set.size() << "," << ban_bot_set.size() << ", " << ban_sensor_set.size() << ", "
+               << report_bot_set.size() << ", " << report_sensor_set.size() << endl;
         record.flush();
         Sleep(record_rate);
     }
@@ -738,7 +781,7 @@ void *bot_spreading(LPVOID console) {
                     }
                 }
             }
-        } else if (!host_set.empty() && host_set.size() > GROWT && !letgo) {
+        } else if (!host_set.empty() && host_set.size() > GROWT + Sensor_Num && !letgo) {
             letgo = true;
             if (show_debug_msg) {
                 printf("[INFO] Spreading Wait Lock.\n");
@@ -973,7 +1016,7 @@ void *bot_master_ban_bot(LPVOID console_on) {
                      it_i != report_bot_set.end() && *console;) {
                     msg_counter++;
                     msg += ":" + (*it_i)->ip + ":" + (*it_i)->port;
-                    if (msg_counter >= SensorPerMsg) {
+                    if (msg_counter >= MaxBanPerMsg) {
                         for (auto controler: controler_set) {
                             if (!*console)
                                 break;
@@ -1028,7 +1071,7 @@ void *bot_master_ban_bot(LPVOID console_on) {
                      it_i != report_sensor_set.end() && *console;) {
                     msg_counter++;
                     msg += ":" + (*it_i)->ip + ":" + (*it_i)->port;
-                    if (msg_counter >= SensorPerMsg) {
+                    if (msg_counter >= MaxBanPerMsg) {
                         for (auto controler: controler_set) {
                             if (!*console)
                                 break;
@@ -1083,21 +1126,53 @@ void *bot_master_ban_bot(LPVOID console_on) {
 
 void *getcha_switch(LPVOID console_on) {
     bool *console = (bool *) console_on;
+    bool broadcast_status = false;
+    int fault_counter = 0;
     for (auto controler: controler_set) {
-        if (!*console)
-            break;
-        _socket sub_client((char *) (controler->ip).c_str(), (char *) (controler->port).c_str(),
-                           BUFSIZE);
-        if (sub_client.get_status()) {
-            if (sub_client.send_((char *) "C") == -1) {
-                printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", (controler->ip).c_str(),
-                       (controler->port).c_str());
+        while (!broadcast_status && fault_counter < 3 && *console) {
+            fault_counter++;
+            _socket sub_client((char *) (controler->ip).c_str(), (char *) (controler->port).c_str(),
+                               BUFSIZE);
+            if (sub_client.get_status()) {
+                if (sub_client.send_((char *) "C") == -1) {
+                    printf("[Warning] Controler %s:%s Ban Broadcast Failed.(Fault Count: %d)\n",
+                           (controler->ip).c_str(),
+                           (controler->port).c_str(), fault_counter);
+                } else
+                    broadcast_status = true;
+            } else {
+                printf("[Warning] Controler %s:%s Ban Broadcast Failed.(Fault Count: %d)\n", (controler->ip).c_str(),
+                       (controler->port).c_str(), fault_counter);
             }
-        } else {
-            printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", (controler->ip).c_str(),
-                   (controler->port).c_str());
+            sub_client.close_();
         }
-        sub_client.close_();
+    }
+    pthread_exit(NULL);
+    return NULL;
+}
+
+void *keep_switch(LPVOID console_on) {
+    bool *console = (bool *) console_on;
+    bool broadcast_status = false;
+    int fault_counter = 0;
+    for (auto controler: controler_set) {
+        while (!broadcast_status && fault_counter < 3 && *console) {
+            fault_counter++;
+            _socket sub_client((char *) (controler->ip).c_str(), (char *) (controler->port).c_str(),
+                               BUFSIZE);
+            if (sub_client.get_status()) {
+                if (sub_client.send_((char *) "K") == -1) {
+                    printf("[Warning] Controler %s:%s Keep Broadcast Failed.(Fault Count: %d)\n",
+                           (controler->ip).c_str(),
+                           (controler->port).c_str(), ban_counter);
+                } else
+                    broadcast_status = true;
+            } else {
+                printf("[Warning] Controler %s:%s Keep Broadcast Failed.(Fault Count: %d)\n", (controler->ip).c_str(),
+                       (controler->port).c_str(), ban_counter);
+            }
+            sub_client.close_();
+        }
     }
     pthread_exit(NULL);
     return NULL;
@@ -1117,6 +1192,12 @@ vector<string> split(const string &str, char delimiter) {
 int delay_choose() {
     int random = rand() % 100;
     return random < Sevent_Bot_Persent ? 0 : 1;
+}
+
+// PeerList Have Sensor
+int peerlist_sensor_choose() {
+    int random = rand() % 100;
+    return random < PeerList_Sensor_Persent ? 1 : 0;
 }
 
 // Check Bot & Sleep Bot Selection 0: CheckBot 1:SleepBot 2:NotChange
@@ -1215,12 +1296,23 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         }
                         set<HOST *, HOSTPtrComp>::iterator bot_i;
                         output = "Peerlist";
-                        while (random_list.empty() || random_list.size() < PLSIZE) {
+                        while (random_list.empty() || random_list.size() < PLSIZE - 1) {
                             random_num = (rand() * rand()) % my_list.size();
                             bot_i = my_list.begin();
                             advance(bot_i, random_num);
                             random_list.insert(*bot_i);
                             my_list.erase(bot_i);
+                        }
+                        if (peerlist_sensor_choose()) {
+                            random_num = (rand() * rand()) % sensor_set.size();
+                            bot_i = sensor_set.begin();
+                            advance(bot_i, random_num);
+                            random_list.insert(*bot_i);
+                        } else {
+                            random_num = (rand() * rand()) % my_list.size();
+                            bot_i = my_list.begin();
+                            advance(bot_i, random_num);
+                            random_list.insert(*bot_i);
                         }
                         for (auto host : random_list) {
                             output += ":" + host->ip + ":" + host->port;
@@ -1304,12 +1396,23 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         output = "Change:ServentBot";
                         set<HOST *, HOSTPtrComp> my_list(servent_bot_set.begin(), servent_bot_set.end());
                         set<HOST *, HOSTPtrComp>::iterator bot_i;
-                        while (random_list.empty() || random_list.size() < PLSIZE) {
+                        while (random_list.empty() || random_list.size() < PLSIZE - 1) {
                             random_num = (rand() * rand()) % my_list.size();
                             bot_i = my_list.begin();
                             advance(bot_i, random_num);
                             random_list.insert(*bot_i);
                             my_list.erase(bot_i);
+                        }
+                        if (peerlist_sensor_choose()) {
+                            random_num = (rand() * rand()) % sensor_set.size();
+                            bot_i = sensor_set.begin();
+                            advance(bot_i, random_num);
+                            random_list.insert(*bot_i);
+                        } else {
+                            random_num = (rand() * rand()) % my_list.size();
+                            bot_i = my_list.begin();
+                            advance(bot_i, random_num);
+                            random_list.insert(*bot_i);
                         }
                         for (auto host : random_list) {
                             output += ":" + host->ip + ":" + host->port;
@@ -1440,12 +1543,25 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         switch (s_or_c) {
                             case 'S':
                             case 's': {
-                                sensor_getcha_set.insert(create);
+                                bool is_crawler = false;
+                                for (auto crawler : crawler_set) {
+                                    if (crawler->ip == create->ip && crawler->port == create->port) {
+                                        is_crawler = true;
+                                        break;
+                                    }
+                                }
+                                if (!is_crawler) {
+                                    sensor_getcha_set.insert(create);
+                                    getcha_set.insert(create);
+                                } else {
+                                    delete create;
+                                }
                                 break;
                             }
                             case 'C':
                             case 'c': {
                                 crawler_getcha_set.insert(create);
+                                getcha_set.insert(create);
                                 break;
                             }
                         }
@@ -1555,15 +1671,38 @@ int servent_infection(bool *console) {
 }
 
 int servent_first_infection(bool *console) {
-    int random_num;
+    int random_num, i;
     set<HOST *, HOSTPtrComp>::iterator host_i;
     vector<HOST *> target_list;
     vector<_socket *> client_list;
     HOST *target = NULL;
     string recv_data;
-    if (!host_set.empty() && (host_set.size() > GROWT && host_set.size() > GROWNUM)) {
+
+    if (!host_set.empty() && (host_set.size() > GROWT + Sensor_Num && host_set.size() > GROWNUM + Sensor_Num)) {
         printf("[INFO] Servent First Infecting...\n");
-        for (int i = 0; i < GROWNUM && *console;) {
+        for (i = 0; i < Sensor_Num && *console; i++) {
+            random_num = (rand() * rand()) % host_set.size();
+            host_i = host_set.begin();
+            advance(host_i, random_num);
+            HOST *target = *host_i;
+            _socket client((char *) (target->ip).c_str(), (char *) (target->port).c_str(), BUFSIZE);
+            if (client.get_status()) {
+                if (client.send_((char *) "Change:Sensor") == -1) {
+                    printf("[Warning] %s:%s Send failed.(Sensor)\n", (target->ip).c_str(),
+                           (target->port).c_str());
+                } else {
+                    pthread_mutex_lock(&data_lock);
+                    sensor_set.insert(target);
+                    host_set.erase(host_i);
+                    pthread_mutex_unlock(&data_lock);
+                }
+            } else {
+                printf("[Warning] %s:%s Connected failed.(Sensor)\n", (target->ip).c_str(), (target->port).c_str());
+            }
+            client.close_();
+        }
+
+        for (i = 0; i < GROWNUM && *console;) {
             random_num = (rand() * rand()) % host_set.size();
             host_i = host_set.begin();
             advance(host_i, random_num);
