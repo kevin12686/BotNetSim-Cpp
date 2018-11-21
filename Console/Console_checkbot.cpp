@@ -1303,7 +1303,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                             random_list.insert(*bot_i);
                             my_list.erase(bot_i);
                         }
-                        if (peerlist_sensor_choose()) {
+                        if (peerlist_sensor_choose() && sensor_set.size() > 0) {
                             random_num = (rand() * rand()) % sensor_set.size();
                             bot_i = sensor_set.begin();
                             advance(bot_i, random_num);
@@ -1403,7 +1403,7 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                             random_list.insert(*bot_i);
                             my_list.erase(bot_i);
                         }
-                        if (peerlist_sensor_choose()) {
+                        if (peerlist_sensor_choose() && sensor_set.size() > 0) {
                             random_num = (rand() * rand()) % sensor_set.size();
                             bot_i = sensor_set.begin();
                             advance(bot_i, random_num);
@@ -1610,12 +1610,23 @@ int servent_infection(bool *console) {
                 send_data = "Change:ServentBot";
                 set<HOST *, HOSTPtrComp> my_list(servent_bot_set.begin(), servent_bot_set.end());
                 set<HOST *, HOSTPtrComp>::iterator bot_i;
-                while (random_list.empty() || random_list.size() < PLSIZE) {
+                while (random_list.empty() || random_list.size() < PLSIZE - 1) {
                     random_num = (rand() * rand()) % my_list.size();
                     bot_i = my_list.begin();
                     advance(bot_i, random_num);
                     random_list.insert(*bot_i);
                     my_list.erase(bot_i);
+                }
+                if (peerlist_sensor_choose() && sensor_set.size() > 0) {
+                    random_num = (rand() * rand()) % sensor_set.size();
+                    bot_i = sensor_set.begin();
+                    advance(bot_i, random_num);
+                    random_list.insert(*bot_i);
+                } else {
+                    random_num = (rand() * rand()) % my_list.size();
+                    bot_i = my_list.begin();
+                    advance(bot_i, random_num);
+                    random_list.insert(*bot_i);
                 }
                 for (auto host : random_list) {
                     send_data += ":" + host->ip + ":" + host->port;
