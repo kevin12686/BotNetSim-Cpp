@@ -14,20 +14,19 @@
 
 #define PORT "6666"
 #define BUFSIZE 4096
+#define CBUFSIZE 10240
 // Mini Seconds
 #define IDLE 1000
 // Max Accept Client
 #define Max_Accept_Num 2000
 // Max Sensor Per Message
 #define MaxBanPerMsg 150
-#define SensorPerMsg 45
+#define SensorPerMsg 450
 #define ServentPerClient 5
 // ?% Become Servent Bot
 #define Sevent_Bot_Persent 100
 
 #define Sleep_Bot_Persent 0
-
-#define PeerList_Sensor_Persent 50
 
 #define Keep_Spreading_Setting false
 #define Reserved_Host 500
@@ -104,6 +103,7 @@ int servent_first_infection(bool *);
 
 // ?% Become Check Bot
 int Check_Bot_Persent = 10;
+int PeerList_Sensor_Persent = 10;
 
 // Setting
 bool show_debug_msg = false;
@@ -181,7 +181,11 @@ int main() {
 
     printf("Check Bot Persent(Default %d): ", Check_Bot_Persent);
     cin >> Check_Bot_Persent;
-    printf("Check Bot Persent: %d %%\n\n", Check_Bot_Persent);
+    printf("Check Bot Persent: %d %%\n", Check_Bot_Persent);
+
+    printf("PeerList Sensor Persent(Default %d): ", PeerList_Sensor_Persent);
+    cin >> PeerList_Sensor_Persent;
+    printf("PeerList Sensor Persent: %d %%\n\n", PeerList_Sensor_Persent);
 
     // timer start
     result = pthread_create(&timer, NULL, virtual_time, NULL);
@@ -321,6 +325,7 @@ int main() {
                    report_bot_set.size(), report_sensor_set.size(), ban_counter);
         } else if (UserCommand == "setting") {
             printf("Check Bot Persent %d %%\n", Check_Bot_Persent);
+            printf("PeerList Sensor Persent: %d %%\n", PeerList_Sensor_Persent);
             printf("Change Bot Number: %d\n", GROWNUM);
             printf("spreading_flag: %s\n", spreading_flag ? "True" : "False");
             printf("keep_flag: %s\n", keep_flag ? "True" : "False");
@@ -432,6 +437,11 @@ int main() {
                      temp_i != sensor_getcha_set.end(); sensor_getcha_set.erase(temp_i++)) {
                     delete *temp_i;
                 }
+                for (temp_i = crawler_getcha_set.begin();
+                     temp_i != crawler_getcha_set.end(); crawler_getcha_set.erase(temp_i++)) {
+                    delete *temp_i;
+                }
+                getcha_set.clear();
             }
             if (!crawler_getcha_set.empty()) {
                 set<HOST *, HOSTPtrComp>::iterator temp_i;
@@ -575,11 +585,12 @@ void *record(LPVOID console_on) {
             << "timestamp, host number, bot number, servent number, client number, sleep number, check number, senser number, crawler number,sensor getcha number, crawler getcha number, total getcha number, ban bot number, ban sensor number, report bot number, report sensor number"
             << endl;
     while (*console) {
-        record << v_t.timestamp() << ", " << host_set.size() << ", " << bot_set.size() << ", " << servent_bot_set.size()
+        record << v_t.timestamp() << ":" << v_t.getRate() << ", " << host_set.size() << ", " << bot_set.size() << ", "
+               << servent_bot_set.size()
                << ", " << bot_set.size() - servent_bot_set.size() - sleep_bot_set.size() - check_bot_set.size() << ", "
                << sleep_bot_set.size() << ", " << check_bot_set.size() << ", " << sensor_set.size()
                << ", " << crawler_set.size() << ", " << sensor_getcha_set.size() << ", " << crawler_getcha_set.size()
-               << ", " << getcha_set.size() << "," << ban_bot_set.size() << ", " << ban_sensor_set.size() << ", "
+               << ", " << getcha_set.size() << ", " << ban_bot_set.size() << ", " << ban_sensor_set.size() << ", "
                << report_bot_set.size() << ", " << report_sensor_set.size() << endl;
         record.flush();
         Sleep(record_rate);
@@ -947,7 +958,7 @@ void *change_crawler(LPVOID console_on) {
         host_i = host_set.begin();
         advance(host_i, random);
         HOST *target = *host_i;
-        _socket client((char *) (target->ip).c_str(), (char *) (target->port).c_str(), BUFSIZE);
+        _socket client((char *) (target->ip).c_str(), (char *) (target->port).c_str(), CBUFSIZE);
         if (client.get_status()) {
             if (client.send_((char *) "Change:Crawler") == -1) {
                 printf("[Warning] %s:%s Send failed.(Crawler)\n", (target->ip).c_str(),
@@ -1126,9 +1137,11 @@ void *bot_master_ban_bot(LPVOID console_on) {
 
 void *getcha_switch(LPVOID console_on) {
     bool *console = (bool *) console_on;
-    bool broadcast_status = false;
-    int fault_counter = 0;
+    bool broadcast_status;
+    int fault_counter;
     for (auto controler: controler_set) {
+        broadcast_status = false;
+        fault_counter = 0;
         while (!broadcast_status && fault_counter < 3 && *console) {
             fault_counter++;
             _socket sub_client((char *) (controler->ip).c_str(), (char *) (controler->port).c_str(),
@@ -1153,9 +1166,11 @@ void *getcha_switch(LPVOID console_on) {
 
 void *keep_switch(LPVOID console_on) {
     bool *console = (bool *) console_on;
-    bool broadcast_status = false;
-    int fault_counter = 0;
+    bool broadcast_status;
+    int fault_counter;
     for (auto controler: controler_set) {
+        broadcast_status = false;
+        fault_counter = 0;
         while (!broadcast_status && fault_counter < 3 && *console) {
             fault_counter++;
             _socket sub_client((char *) (controler->ip).c_str(), (char *) (controler->port).c_str(),
@@ -1164,12 +1179,12 @@ void *keep_switch(LPVOID console_on) {
                 if (sub_client.send_((char *) "K") == -1) {
                     printf("[Warning] Controler %s:%s Keep Broadcast Failed.(Fault Count: %d)\n",
                            (controler->ip).c_str(),
-                           (controler->port).c_str(), ban_counter);
+                           (controler->port).c_str(), fault_counter);
                 } else
                     broadcast_status = true;
             } else {
                 printf("[Warning] Controler %s:%s Keep Broadcast Failed.(Fault Count: %d)\n", (controler->ip).c_str(),
-                       (controler->port).c_str(), ban_counter);
+                       (controler->port).c_str(), fault_counter);
             }
             sub_client.close_();
         }
@@ -1503,23 +1518,31 @@ int handle_msg(_socket *client, string msg_data, HOST *this_host) {
                             report_bot_set.insert(create);
                     }
                     bool flag = ban_bot_set.size() > bot_psize || ban_sensor_set.size() > sensor_psize;
+                    bool broadcast_status;
+                    int fault_counter;
                     pthread_mutex_unlock(&ban_lock);
                     if (flag && auto_ban_broadcast) {
                         set<HOST *, HOSTPtrComp>::iterator it_i;
                         for (it_i = controler_set.begin(); it_i != controler_set.end(); it_i++) {
-                            _socket sub_client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(),
-                                               BUFSIZE);
-                            if (sub_client.get_status()) {
-                                string ban_msg = "Ban:" + msg_data;
-                                if (sub_client.send_((char *) ban_msg.c_str()) == -1) {
-                                    printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
-                                           ((*it_i)->port).c_str());
+                            broadcast_status = false;
+                            fault_counter = 0;
+                            while (!broadcast_status && fault_counter < 3) {
+                                fault_counter++;
+                                _socket sub_client((char *) ((*it_i)->ip).c_str(), (char *) ((*it_i)->port).c_str(),
+                                                   BUFSIZE);
+                                if (sub_client.get_status()) {
+                                    string ban_msg = "Ban:" + msg_data;
+                                    if (sub_client.send_((char *) ban_msg.c_str()) == -1) {
+                                        printf("[Warning] Controler %s:%s Ban Broadcast Failed.(Fault Count: %d)\n",
+                                               ((*it_i)->ip).c_str(), ((*it_i)->port).c_str(), fault_counter);
+                                    } else
+                                        broadcast_status = true;
+                                } else {
+                                    printf("[Warning] Controler %s:%s Ban Broadcast Failed.(Fault Count: %d)\n",
+                                           ((*it_i)->ip).c_str(), ((*it_i)->port).c_str(), fault_counter);
                                 }
-                            } else {
-                                printf("[Warning] Controler %s:%s Ban Broadcast Failed.\n", ((*it_i)->ip).c_str(),
-                                       ((*it_i)->port).c_str());
+                                sub_client.close_();
                             }
-                            sub_client.close_();
                         }
                     }
                 }
